@@ -174,6 +174,7 @@ android {
         aidl = true
         compose = true
         buildConfig = true
+        viewBinding = true
     }
     lint {
         // The translations are always going to lag behind new strings being
@@ -237,6 +238,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.protobuf.javalite)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation(project(":MdBlock"))
 }
 
 val archive = tasks.register("archive") {

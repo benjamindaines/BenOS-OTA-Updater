@@ -24,10 +24,13 @@ class Preferences(initialContext: Context) {
     companion object {
         private val TAG = Preferences::class.java.simpleName
 
+        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/testing"
+
         // Keep in the same order as the helper functions below.
         private const val PREF_ALREADY_MIGRATED = "already_migrated"
         private const val PREF_DEBUG_MODE = "debug_mode"
         private const val PREF_OTA_SOURCE = "ota_source"
+        private const val PREF_ALLOW_CUSTOM_OTA_SOURCE = "allow_custom_ota_source"
         private const val PREF_AUTOMATIC_CHECK = "automatic_check"
         private const val PREF_AUTOMATIC_INSTALL = "automatic_install"
         private const val PREF_UNMETERED_ONLY = "unmetered_only"
@@ -142,6 +145,20 @@ class Preferences(initialContext: Context) {
                     Log.w(TAG, "Error when releasing persisted URI permission for: $oldUri", e)
                 }
             }
+        }
+
+    val defaultOtaSource: Uri?
+        get() = DEFAULT_OTA_SOURCE.takeIf { it.isNotBlank() }?.toUri()
+
+    var allowCustomOtaSource: Boolean
+        get() = prefs.getBoolean(PREF_ALLOW_CUSTOM_OTA_SOURCE, false)
+        set(enabled) = prefs.edit { putBoolean(PREF_ALLOW_CUSTOM_OTA_SOURCE, enabled) }
+
+    val effectiveOtaSource: Uri?
+        get() = if (allowCustomOtaSource) {
+            otaSource ?: defaultOtaSource
+        } else {
+            defaultOtaSource ?: otaSource
         }
 
     /** Whether to check for updates periodically. */

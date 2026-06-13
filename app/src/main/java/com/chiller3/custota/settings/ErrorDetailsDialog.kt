@@ -9,7 +9,6 @@ package com.chiller3.custota.settings
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Text
@@ -34,9 +33,7 @@ fun ErrorDetailsDialog(
         },
         text = {
             message?.let {
-                SelectionContainer {
-                    Text(text = it)
-                }
+                Text(text = it)
             }
         },
         onDismissRequest = onDismiss,

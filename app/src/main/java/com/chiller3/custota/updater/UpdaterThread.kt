@@ -614,7 +614,7 @@ class UpdaterThread(
 
     /** Synchronously check for updates. */
     private fun checkForUpdates(): CheckUpdateResult {
-        val baseUri = prefs.otaSource ?: throw IllegalStateException("No URI configured")
+        val baseUri = prefs.effectiveOtaSource ?: throw IllegalStateException("No URI configured")
         val updateInfoUri = resolveUri(baseUri, "${Build.DEVICE}.json")
         Log.d(TAG, "Update info URI: $updateInfoUri")
 
@@ -664,12 +664,51 @@ class UpdaterThread(
             }
         }
 
+        // Best-effort fetch of an optional message to show the user before installing. The file is
+        // a Markdown document sitting alongside the device JSON. If it is absent, there is simply
+        // no message.
+        val message = try {
+            val messageUri = resolveUri(baseUri, "${Build.DEVICE}.md")
+            Log.d(TAG, "Update message URI: $messageUri")
+            fetchUpdateMessage(messageUri)
+        } catch (e: Exception) {
+            Log.d(TAG, "No update message available", e)
+            null
+        }
+
         return CheckUpdateResult(
             updateAvailable,
             fingerprints,
             otaUri,
             csigInfo,
+            message,
         )
+    }
+
+    /**
+     * Fetch the optional Markdown update message. Returns null (rather than throwing) when the file
+     * is missing or empty, so its absence never interferes with the update.
+     */
+    private fun fetchUpdateMessage(uri: Uri): String? {
+        val text = if (uri.scheme == ContentResolver.SCHEME_CONTENT) {
+            context.contentResolver.openInputStream(uri)?.use {
+                it.readBytes().toString(Charsets.UTF_8)
+            }
+        } else {
+            openUrl(URL(uri.toString())) { connection ->
+                connection.connect()
+                when {
+                    connection.responseCode == HttpURLConnection.HTTP_NOT_FOUND -> null
+                    connection.responseCode / 100 != 2 -> {
+                        Log.d(TAG, "No message: HTTP ${connection.responseCode} for $uri")
+                        null
+                    }
+                    else -> connection.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+                }
+            }
+        }
+
+        return text?.trim()?.ifEmpty { null }
     }
 
     /** Asynchronously trigger the update_engine payload application. */
@@ -787,6 +826,27 @@ class UpdaterThread(
         }
     }
 
+    /**
+     * Remove user-installed apps that would conflict with same-named system apps shipped by the
+     * OTA. This is invoked once the engine has reached [UpdateEngineStatus.UPDATED_NEED_REBOOT] and
+     * before the user is prompted to reboot, so it runs while still booted on the old slot where a
+     * conflicting app is still an ordinary user package and can be cleanly uninstalled.
+     *
+     * Failures here must never block or fail the (already successful) update flow, so all errors
+     * are caught and logged.
+     */
+    private fun resolvePackageConflicts() {
+        try {
+            Log.d(TAG, "Running package conflict resolution before reboot")
+            val removed = PackageConflictResolver(context).resolveConflicts()
+            if (removed.isNotEmpty()) {
+                Log.i(TAG, "Removed conflicting packages before reboot: $removed")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Package conflict resolution failed", e)
+        }
+    }
+
     @SuppressLint("WakelockTimeout")
     override fun run() {
         startLogcat()
@@ -822,6 +882,10 @@ class UpdaterThread(
                     listener.onUpdateResult(this, UpdateFailed(newStatusStr))
                 }
             } else if (status == UpdateEngineStatus.UPDATED_NEED_REBOOT) {
+                // The engine is already pending reboot from a previous run. Resolve any package
+                // conflicts before reminding the user to reboot, in case it wasn't done already.
+                resolvePackageConflicts()
+
                 // Resend success notification to remind the user to reboot. We can't perform any
                 // further operations besides reverting.
                 listener.onUpdateResult(this, UpdateNeedReboot)
@@ -843,10 +907,14 @@ class UpdaterThread(
                         // Update not needed.
                         listener.onUpdateResult(this, UpdateUnnecessary)
                         return
-                    } else if (action == Action.CHECK) {
-                        // Just alert that an update is available.
+                    } else if (action == Action.CHECK ||
+                        (action == Action.INSTALL && checkUpdateResult.message != null)) {
+                        // Alert that an update is available, attaching the message if present. When
+                        // a message exists, this branch also fires for automatic installation
+                        // (Action.INSTALL), overriding it so the user must acknowledge the message
+                        // first (via the notification -> full-screen message -> Action.INSTALL_CONFIRMED).
                         listener.onUpdateResult(this,
-                            UpdateAvailable(checkUpdateResult.fingerprints))
+                            UpdateAvailable(checkUpdateResult.fingerprints, checkUpdateResult.message))
                         return
                     }
 
@@ -876,6 +944,13 @@ class UpdaterThread(
                         listener.onUpdateResult(this, UpdateCleanedUp)
                     } else {
                         Log.d(TAG, "Successfully completed upgrade")
+
+                        // The new slot is staged and the engine is now pending reboot. We are still
+                        // booted on the old slot, so any conflicting user-installed app is still an
+                        // ordinary /data/app package and can be cleanly uninstalled here, before the
+                        // user is prompted to reboot into the new slot.
+                        resolvePackageConflicts()
+
                         listener.onUpdateResult(this, UpdateSucceeded)
                     }
                 } else if (error == UpdateEngineError.USER_CANCELED) {
@@ -923,6 +998,7 @@ class UpdaterThread(
         val fingerprints: List<String>,
         val otaUri: Uri,
         val csigInfo: CsigInfo,
+        val message: String?,
     )
 
     @Serializable
@@ -975,23 +1051,29 @@ class UpdaterThread(
         MONITOR,
         CHECK,
         INSTALL,
-        REVERT;
+        REVERT,
+
+        /**
+         * Like [INSTALL], but the user has already acknowledged the update message, so the message
+         * gate in [run] is bypassed. Scheduled by [UpdateMessageActivity].
+         */
+        INSTALL_CONFIRMED;
 
         val requiresNetwork: Boolean
-            get() = this == CHECK || this == INSTALL
+            get() = this == CHECK || this == INSTALL || this == INSTALL_CONFIRMED
 
         val performsLargeDownloads: Boolean
-            get() = this == INSTALL
+            get() = this == INSTALL || this == INSTALL_CONFIRMED
 
         val usesSignificantBattery: Boolean
-            get() = this == INSTALL
+            get() = this == INSTALL || this == INSTALL_CONFIRMED
     }
 
     sealed interface Result
 
     data object NothingToMonitor : Result
 
-    data class UpdateAvailable(val fingerprints: List<String>) : Result
+    data class UpdateAvailable(val fingerprints: List<String>, val message: String?) : Result
 
     data object UpdateUnnecessary : Result
 

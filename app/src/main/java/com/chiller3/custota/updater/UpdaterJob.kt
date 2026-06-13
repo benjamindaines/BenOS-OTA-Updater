@@ -33,7 +33,7 @@ class UpdaterJob: JobService() {
         val action = UpdaterThread.Action.entries[actionIndex]
 
         var network = params.network
-        if (prefs.otaSource?.isGuaranteedLocalFile != true && action.requiresNetwork && network == null) {
+        if (prefs.effectiveOtaSource?.isGuaranteedLocalFile != true && action.requiresNetwork && network == null) {
             // Ever since the Android 15 betas, Android sometimes invokes this job with a null
             // Network instance, even though the network requirement is set and a sufficient network
             // is available. We'll try to work around this by manually querying the active network.
@@ -79,7 +79,7 @@ class UpdaterJob: JobService() {
         private const val ID_PERIODIC = 2
 
         private const val EXTRA_ACTION = "action"
-
+        // Checks in 6 hour intervals 
         private const val PERIODIC_INTERVAL_MS = 6L * 60 * 60 * 1000
 
         // Scheduling a periodic job usually makes the first iteration run immediately. We'll
@@ -95,7 +95,7 @@ class UpdaterJob: JobService() {
             val prefs = Preferences(context)
 
             var networkType = JobInfo.NETWORK_TYPE_NONE
-            if (prefs.otaSource?.isGuaranteedLocalFile != true) {
+            if (prefs.effectiveOtaSource?.isGuaranteedLocalFile != true) {
                 if (action.performsLargeDownloads && prefs.requireUnmetered) {
                     networkType = JobInfo.NETWORK_TYPE_UNMETERED
                 } else if (action.requiresNetwork) {

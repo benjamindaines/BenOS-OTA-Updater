@@ -17,6 +17,8 @@
     <string name="pref_check_for_updates_desc">Schedule a check for new OTA updates.</string>
     <string name="pref_ota_source_name">OTA installation source</string>
     <string name="pref_ota_source_none">No installation source set.</string>
+    <string name="pref_allow_custom_ota_source_name">Use custom OTA source</string>
+    <string name="pref_allow_custom_ota_source_desc">Unlock the OTA installation source field so you can set your own server URL or local directory. When disabled, the built-in default source is used.</string>
     <string name="pref_certificate_name">Certificate %1$s (%2$s)</string>
     <string name="pref_certificate_desc_subject">Subject: %1$s</string>
     <string name="pref_certificate_desc_serial">Serial: %1$s</string>
@@ -118,4 +120,8 @@
     <string name="alert_csig_cert_load_failure">Failed to load csig certificate.</string>
     <string name="alert_browser_not_found">No web browser is available.</string>
     <string name="alert_documentsui_not_found">Android\'s builtin file manager (DocumentsUI) is unavailable.</string>
+
+    <!-- Update message screen -->
+    <string name="update_message_title">Update available</string>
+    <string name="update_message_dont_install">Don\'t install</string>
 </resources>

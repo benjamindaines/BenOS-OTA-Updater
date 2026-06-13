@@ -93,7 +93,7 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
             val silent = intent.getBooleanExtra(EXTRA_SILENT, false)
 
             if (action != UpdaterThread.Action.MONITOR) {
-                val otaSource = prefs.otaSource
+                val otaSource = prefs.effectiveOtaSource
                 if (otaSource == null) {
                     Log.w(TAG, "Not starting thread because no URL is configured")
                     return
@@ -231,6 +231,10 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
         val showInstall: Boolean
         val showRetry: Boolean
         val showReboot: Boolean
+        // When non-null, the "Install" action must route through the full-screen message screen
+        // instead of starting the install directly.
+        var updateMessage: String? = null
+        var updateFingerprints: List<String> = emptyList()
 
         when (result) {
             is UpdaterThread.NothingToMonitor -> {
@@ -256,6 +260,8 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
                 showInstall = true
                 showRetry = false
                 showReboot = false
+                updateMessage = result.message
+                updateFingerprints = result.fingerprints
             }
             UpdaterThread.UpdateUnnecessary -> {
                 if (silenceForPeriodic) {
@@ -325,10 +331,21 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
 
         val actionResIds = mutableListOf<Int>()
         val actionIntents = mutableListOf<Intent>()
+        val activityActionResIds = mutableListOf<Int>()
+        val activityActionIntents = mutableListOf<Intent>()
 
         if (showInstall) {
-            actionResIds.add(R.string.notification_action_install)
-            actionIntents.add(createScheduleIntent(this, UpdaterThread.Action.INSTALL))
+            val msg = updateMessage
+            if (msg != null) {
+                // There is a message to show first: the Install button opens the full-screen
+                // message screen, which proceeds to install only if the user confirms.
+                activityActionResIds.add(R.string.notification_action_install)
+                activityActionIntents.add(
+                    UpdateMessageActivity.createIntent(this, msg, updateFingerprints))
+            } else {
+                actionResIds.add(R.string.notification_action_install)
+                actionIntents.add(createScheduleIntent(this, UpdaterThread.Action.INSTALL))
+            }
         }
         if (showRetry) {
             actionResIds.add(R.string.notification_action_retry)
@@ -351,6 +368,7 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
             actionResIds.zip(actionIntents),
             // Do not leak information about errors while locked in case of direct boot.
             showInstall || showReboot,
+            activityActionResIds.zip(activityActionIntents),
         )
     }
 

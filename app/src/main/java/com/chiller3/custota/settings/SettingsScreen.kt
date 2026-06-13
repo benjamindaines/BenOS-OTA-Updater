@@ -33,7 +33,6 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.net.toUri
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chiller3.custota.BuildConfig
@@ -55,37 +54,6 @@ import com.chiller3.custota.updater.OtaPaths
 import com.chiller3.custota.updater.UpdaterJob
 import com.chiller3.custota.updater.UpdaterThread
 import com.chiller3.custota.wrapper.SystemPropertiesProxy
-import java.security.PublicKey
-import java.security.cert.Certificate
-import java.security.cert.X509Certificate
-import java.security.interfaces.DSAPublicKey
-import java.security.interfaces.ECPublicKey
-import java.security.interfaces.RSAPublicKey
-
-private val PublicKey.keyLength: Int
-    get() {
-        when (this) {
-            is ECPublicKey -> params?.order?.bitLength()?.let { return it }
-            is RSAPublicKey -> return modulus.bitLength()
-            is DSAPublicKey -> return if (params != null) {
-                params.p.bitLength()
-            } else {
-                y.bitLength()
-            }
-        }
-
-        return -1
-    }
-
-private val Certificate.typeName: String
-    get() = buildString {
-        append(publicKey.algorithm)
-        val keyLength = publicKey.keyLength
-        if (keyLength >= 0) {
-            append(' ')
-            append(keyLength)
-        }
-    }
 
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
@@ -94,7 +62,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
 
     val prefs = remember { Preferences(context) }
     var reloadPrefs by remember { mutableIntStateOf(0) }
-    val otaSource = remember(reloadPrefs) { prefs.otaSource }
+    val allowCustomOtaSource = remember(reloadPrefs) { prefs.allowCustomOtaSource }
+    val effectiveOtaSource = remember(reloadPrefs) { prefs.effectiveOtaSource }
     val automaticCheck = remember(reloadPrefs) { prefs.automaticCheck }
     val automaticInstall = remember(reloadPrefs) { prefs.automaticInstall }
     val requireUnmetered = remember(reloadPrefs) { prefs.requireUnmetered }
@@ -105,7 +74,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val pinNetworkId = remember(reloadPrefs) { prefs.pinNetworkId }
 
     val bootloaderStatus by viewModel.bootloaderStatus.collectAsStateWithLifecycle()
-    val certificates by viewModel.certificates.collectAsStateWithLifecycle()
 
     var scheduledAction by rememberSaveable { mutableStateOf<UpdaterThread.Action?>(null) }
 
@@ -127,14 +95,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             scheduledAction = null
         } else {
             requestPermissionRequired.launch(Permissions.REQUIRED)
-        }
-    }
-
-    val requestSafInstallCsigCert = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        uri?.let {
-            viewModel.installCsigCert(it)
         }
     }
 
@@ -185,7 +145,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         }
 
         SettingsContent(
-            otaSource = otaSource,
+            allowCustomOtaSource = allowCustomOtaSource,
+            effectiveOtaSource = effectiveOtaSource,
             automaticCheck = automaticCheck,
             automaticInstall = automaticInstall,
             requireUnmetered = requireUnmetered,
@@ -194,12 +155,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             androidVersion = Build.VERSION.RELEASE,
             securityPatchLevel = SystemPropertiesProxy.get(UpdaterThread.PROP_SECURITY_PATCH),
             fingerprint = Build.FINGERPRINT,
-            vbmetaDigest = SystemPropertiesProxy.get(UpdaterThread.PROP_VBMETA_DIGEST),
             bootSlot = SystemPropertiesProxy.get("ro.boot.slot_suffix")
                 .removePrefix("_").uppercase(),
             bootloaderStatus = bootloaderStatus,
-            certificates = certificates,
             isDebugMode = isDebugMode,
+            vbmetaDigest = SystemPropertiesProxy.get(UpdaterThread.PROP_VBMETA_DIGEST),
             allowReinstall = allowReinstall,
             pinNetworkId = pinNetworkId,
             onCheckForUpdates = {
@@ -213,6 +173,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             },
             onOtaSourceReset = {
                 prefs.otaSource = null
+                reloadPrefs++
+                UpdaterJob.schedulePeriodic(context, true)
+            },
+            onAllowCustomOtaSourceChange = { enabled ->
+                prefs.allowCustomOtaSource = enabled
                 reloadPrefs++
                 UpdaterJob.schedulePeriodic(context, true)
             },
@@ -240,9 +205,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 prefs.skipPostInstall = enabled
                 reloadPrefs++
             },
-            onCsigCertRemove = { certificate ->
-                viewModel.removeCsigCert(certificate)
-            },
+        
             onSourceRepoOpen = {
                 val uri = BuildConfig.PROJECT_URL_AT_COMMIT.toUri()
                 try {
@@ -279,15 +242,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 scheduledAction = UpdaterThread.Action.REVERT
                 performAction()
             },
-            onCsigCertInstall = {
-                // See AOSP's frameworks/base/mime/java-res/android.mime.types
-                requestSafInstallCsigCert.launch(arrayOf(
-                    "application/x-x509-ca-cert",
-                    "application/x-x509-user-cert",
-                    "application/x-x509-server-cert",
-                    "application/x-pem-file",
-                ))
-            },
             onPinNetworkIdChange = { enabled ->
                 prefs.pinNetworkId = enabled
                 reloadPrefs++
@@ -296,18 +250,17 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         )
     }
 
-    LifecycleResumeEffect(Unit) {
+    LaunchedEffect(Unit) {
         // Make sure we refresh this every time the user switches back to the app.
         viewModel.refreshBootloaderStatus()
-
-        onPauseOrDispose {}
     }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SettingsContent(
-    otaSource: Uri?,
+    allowCustomOtaSource: Boolean,
+    effectiveOtaSource: Uri?,
     automaticCheck: Boolean,
     automaticInstall: Boolean,
     requireUnmetered: Boolean,
@@ -316,28 +269,26 @@ private fun SettingsContent(
     androidVersion: String,
     securityPatchLevel: String,
     fingerprint: String,
-    vbmetaDigest: String,
     bootSlot: String,
     bootloaderStatus: SettingsViewModel.BootloaderStatus?,
-    certificates: List<Pair<X509Certificate, Boolean>>,
     isDebugMode: Boolean,
+    vbmetaDigest: String,
     allowReinstall: Boolean,
     pinNetworkId: Boolean,
     onCheckForUpdates: () -> Unit,
     onOtaSourceChange: (Uri) -> Unit,
     onOtaSourceReset: () -> Unit,
+    onAllowCustomOtaSourceChange: (Boolean) -> Unit,
     onAutomaticCheckChange: (Boolean) -> Unit,
     onAutomaticInstallChange: (Boolean) -> Unit,
     onRequireUnmeteredChange: (Boolean) -> Unit,
     onRequireBatteryNotLowChange: (Boolean) -> Unit,
     onSkipPostInstallChange: (Boolean) -> Unit,
-    onCsigCertRemove: (X509Certificate) -> Unit,
     onSourceRepoOpen: () -> Unit,
     onDebugModeChange: (Boolean) -> Unit,
     onOpenLogDir: () -> Unit,
     onAllowReinstallChange: (Boolean) -> Unit,
     onRevertCompleted: () -> Unit,
-    onCsigCertInstall: () -> Unit,
     onPinNetworkIdChange: (Boolean) -> Unit,
     contentPadding: PaddingValues = PaddingValues(),
 ) {
@@ -354,7 +305,7 @@ private fun SettingsContent(
         item(key = "check_for_updates") {
             Preference(
                 onClick = onCheckForUpdates,
-                enabled = otaSource != null,
+                enabled = effectiveOtaSource != null,
                 shapes = BetterSegmentedShapes.top(),
                 title = { Text(text = stringResource(R.string.pref_check_for_updates_name)) },
                 summary = { Text(text = stringResource(R.string.pref_check_for_updates_desc)) },
@@ -366,9 +317,10 @@ private fun SettingsContent(
             Preference(
                 onClick = { showOtaSourceDialog = true },
                 onLongClick = onOtaSourceReset,
+                enabled = allowCustomOtaSource,
                 shapes = BetterSegmentedShapes.bottom(),
                 title = { Text(text = stringResource(R.string.pref_ota_source_name)) },
-                summary = { Text(text = otaSourceSummary(otaSource)) },
+                summary = { Text(text = otaSourceSummary(effectiveOtaSource)) },
                 modifier = Modifier.animateItem(),
             )
         }
@@ -403,7 +355,7 @@ private fun SettingsContent(
             )
         }
 
-        if (otaSource?.isGuaranteedLocalFile != true) {
+        if (effectiveOtaSource?.isGuaranteedLocalFile != true) {
             item(key = "unmetered_only") {
                 SwitchPreference(
                     checked = requireUnmetered,
@@ -423,17 +375,6 @@ private fun SettingsContent(
                 shapes = BetterSegmentedShapes.middle(),
                 title = { Text(text = stringResource(R.string.pref_battery_not_low_name)) },
                 summary = { Text(text = stringResource(R.string.pref_battery_not_low_desc)) },
-                modifier = Modifier.animateItem(),
-            )
-        }
-
-        item(key = "skip_postinstall") {
-            SwitchPreference(
-                checked = skipPostInstall,
-                onCheckedChange = onSkipPostInstallChange,
-                shapes = BetterSegmentedShapes.bottom(),
-                title = { Text(text = stringResource(R.string.pref_skip_postinstall_name)) },
-                summary = { Text(text = stringResource(R.string.pref_skip_postinstall_desc)) },
                 modifier = Modifier.animateItem(),
             )
         }
@@ -465,26 +406,6 @@ private fun SettingsContent(
             )
         }
 
-        item(key = "fingerprint") {
-            Preference(
-                onClick = {},
-                shapes = BetterSegmentedShapes.middle(),
-                title = { Text(text = stringResource(R.string.pref_fingerprint_name)) },
-                summary = { Text(text = fingerprint) },
-                modifier = Modifier.animateItem(),
-            )
-        }
-
-        item(key = "vbmeta_digest") {
-            Preference(
-                onClick = {},
-                shapes = BetterSegmentedShapes.middle(),
-                title = { Text(text = stringResource(R.string.pref_vbmeta_digest_name)) },
-                summary = { Text(text = vbmetaDigest) },
-                modifier = Modifier.animateItem(),
-            )
-        }
-
         item(key = "boot_slot") {
             Preference(
                 onClick = {},
@@ -503,48 +424,6 @@ private fun SettingsContent(
                 summary = { bootloaderStatus?.let { Text(text = bootloaderStatusSummary(it)) } },
                 modifier = Modifier.animateItem(),
             )
-        }
-
-        item(key = "certificates") {
-            PreferenceCategory(
-                title = { Text(text = stringResource(R.string.pref_header_certificates)) },
-                modifier = Modifier.animateItem(),
-            )
-        }
-
-        if (certificates.isEmpty()) {
-            item(key = "no_certificates") {
-                val summary = stringResource(
-                    R.string.pref_no_certificates_desc,
-                    OtaPaths.OTACERTS_ZIP,
-                )
-
-                Preference(
-                    onClick = {},
-                    enabled = false,
-                    shapes = BetterSegmentedShapes.single(),
-                    title = { Text(text = stringResource(R.string.pref_no_certificates_name)) },
-                    summary = { Text(text = summary) },
-                    modifier = Modifier.animateItem(),
-                )
-            }
-        } else {
-            itemsIndexed(certificates, key = { _, (c, _) -> c }) { index, (certificate, isSystem) ->
-                val onLongClick = if (isSystem) {
-                    null
-                } else {
-                    { onCsigCertRemove(certificate) }
-                }
-
-                Preference(
-                    onClick = {},
-                    onLongClick = onLongClick,
-                    shapes = betterSegmentedShapes(index = index, count = certificates.size),
-                    title = { Text(text = certificateTitle(index, isSystem)) },
-                    summary = { Text(text = certificateSummary(certificate)) },
-                    modifier = Modifier.animateItem(),
-                )
-            }
         }
 
         item(key = "about") {
@@ -572,11 +451,31 @@ private fun SettingsContent(
                     modifier = Modifier.animateItem(),
                 )
             }
+            
+            item(key = "fingerprint") {
+                Preference(
+                    onClick = {},
+                    shapes = BetterSegmentedShapes.top(),
+                    title = { Text(text = stringResource(R.string.pref_fingerprint_name)) },
+                    summary = { Text(text = fingerprint) },
+                    modifier = Modifier.animateItem(),
+                )
+        }
+
+            item(key = "vbmeta_digest") {
+                Preference(
+                    onClick = {},
+                    shapes = BetterSegmentedShapes.middle(),
+                    title = { Text(text = stringResource(R.string.pref_vbmeta_digest_name)) },
+                    summary = { Text(text = vbmetaDigest) },
+                    modifier = Modifier.animateItem(),
+                )
+        }
 
             item(key = "open_log_dir") {
                 Preference(
                     onClick = onOpenLogDir,
-                    shapes = BetterSegmentedShapes.top(),
+                    shapes = BetterSegmentedShapes.middle(),
                     title = { Text(text = stringResource(R.string.pref_open_log_dir_name)) },
                     summary = { Text(text = stringResource(R.string.pref_open_log_dir_desc)) },
                     modifier = Modifier.animateItem(),
@@ -594,6 +493,17 @@ private fun SettingsContent(
                 )
             }
 
+            item(key = "skip_postinstall") {
+                SwitchPreference(
+                    checked = skipPostInstall,
+                    onCheckedChange = onSkipPostInstallChange,
+                    shapes = BetterSegmentedShapes.middle(),
+                    title = { Text(text = stringResource(R.string.pref_skip_postinstall_name)) },
+                    summary = { Text(text = stringResource(R.string.pref_skip_postinstall_desc)) },
+                    modifier = Modifier.animateItem(),
+            )
+        }
+
             item(key = "revert_completed") {
                 Preference(
                     onClick = onRevertCompleted,
@@ -604,23 +514,24 @@ private fun SettingsContent(
                 )
             }
 
-            item(key = "install_csig_cert") {
-                Preference(
-                    onClick = onCsigCertInstall,
-                    shapes = BetterSegmentedShapes.middle(),
-                    title = { Text(text = stringResource(R.string.pref_install_csig_cert_name)) },
-                    summary = { Text(text = stringResource(R.string.pref_install_csig_cert_desc)) },
-                    modifier = Modifier.animateItem(),
-                )
-            }
-
             item(key = "pin_network_id") {
                 SwitchPreference(
                     checked = pinNetworkId,
                     onCheckedChange = onPinNetworkIdChange,
-                    shapes = BetterSegmentedShapes.bottom(),
+                    shapes = BetterSegmentedShapes.middle(),
                     title = { Text(text = stringResource(R.string.pref_pin_network_id_name)) },
                     summary = { Text(text = stringResource(R.string.pref_pin_network_id_desc)) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
+
+            item(key = "allow_custom_ota_source") {
+                SwitchPreference(
+                    checked = allowCustomOtaSource,
+                    onCheckedChange = onAllowCustomOtaSourceChange,
+                    shapes = BetterSegmentedShapes.bottom(),
+                    title = { Text(text = stringResource(R.string.pref_allow_custom_ota_source_name)) },
+                    summary = { Text(text = stringResource(R.string.pref_allow_custom_ota_source_desc)) },
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -629,7 +540,7 @@ private fun SettingsContent(
 
     if (showOtaSourceDialog) {
         OtaSourceDialog(
-            initialUri = otaSource,
+            initialUri = effectiveOtaSource,
             onSelect = { uri ->
                 onOtaSourceChange(uri)
                 @Suppress("AssignedValueIsNeverRead")
@@ -678,26 +589,6 @@ private fun bootloaderStatusSummary(status: SettingsViewModel.BootloaderStatus) 
 }
 
 @Composable
-private fun certificateTitle(index: Int, isSystem: Boolean): String {
-    val validates = if (isSystem) { "OTA + csig" } else { "csig" }
-
-    return stringResource(R.string.pref_certificate_name, (index + 1).toString(), validates)
-}
-
-@Composable
-private fun certificateSummary(certificate: X509Certificate) = buildString {
-    append(stringResource(R.string.pref_certificate_desc_subject,
-        certificate.subjectDN.toString()))
-    append('\n')
-
-    append(stringResource(R.string.pref_certificate_desc_serial,
-        certificate.serialNumber.toString(16)))
-    append('\n')
-
-    append(stringResource(R.string.pref_certificate_desc_type, certificate.typeName))
-}
-
-@Composable
 private fun versionSummary(isDebugMode: Boolean): String {
     val suffix = if (isDebugMode) "+debugmode" else ""
 
@@ -722,41 +613,40 @@ private fun PreviewSettingsScreen() {
             title = { Text(text = stringResource(R.string.app_name)) },
         ) { params ->
             SettingsContent(
-                otaSource = uri,
+                allowCustomOtaSource = false,
+                effectiveOtaSource = uri,
                 automaticCheck = true,
-                automaticInstall = false,
+                automaticInstall = true,
                 requireUnmetered = true,
                 requireBatteryNotLow = true,
                 skipPostInstall = false,
                 androidVersion = "16",
                 securityPatchLevel = "2026-05-05",
-                fingerprint = Build.FINGERPRINT,
-                vbmetaDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                 bootSlot = "A",
                 bootloaderStatus = SettingsViewModel.BootloaderStatus.Success(
                     unlocked = false,
                     allowedByCarrier = true,
                     allowedByUser = true,
                 ),
-                certificates = emptyList(),
                 isDebugMode = true,
+                fingerprint = Build.FINGERPRINT,
+                vbmetaDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                 allowReinstall = false,
                 pinNetworkId = true,
                 onCheckForUpdates = {},
                 onOtaSourceChange = {},
                 onOtaSourceReset = {},
+                onAllowCustomOtaSourceChange = {},
                 onAutomaticCheckChange = {},
                 onAutomaticInstallChange = {},
                 onRequireUnmeteredChange = {},
                 onRequireBatteryNotLowChange = {},
                 onSkipPostInstallChange = {},
-                onCsigCertRemove = {},
                 onSourceRepoOpen = {},
                 onDebugModeChange = {},
                 onOpenLogDir = {},
                 onAllowReinstallChange = {},
                 onRevertCompleted = {},
-                onCsigCertInstall = {},
                 onPinNetworkIdChange = {},
                 contentPadding = params.contentPadding,
             )

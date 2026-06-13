@@ -45,7 +45,7 @@ class Notifications(
     private fun createCheckAlertsChannel() = NotificationChannel(
         CHANNEL_ID_CHECK,
         context.getString(R.string.notification_channel_check_name),
-        NotificationManager.IMPORTANCE_HIGH,
+        NotificationManager.IMPORTANCE_LOW,
     ).apply {
         description = context.getString(R.string.notification_channel_check_desc)
     }
@@ -53,7 +53,7 @@ class Notifications(
     private fun createFailureAlertsChannel() = NotificationChannel(
         CHANNEL_ID_FAILURE,
         context.getString(R.string.notification_channel_failure_name),
-        NotificationManager.IMPORTANCE_HIGH,
+        NotificationManager.IMPORTANCE_LOW,
     ).apply {
         description = context.getString(R.string.notification_channel_failure_desc)
     }
@@ -174,6 +174,7 @@ class Notifications(
         errorMsg: String?,
         actions: List<Pair<Int, Intent>>,
         showOnLockScreen: Boolean,
+        activityActions: List<Pair<Int, Intent>> = emptyList(),
     ) {
         val notification = Notification.Builder(context, channel).run {
             val text = buildString {
@@ -202,6 +203,21 @@ class Notifications(
                     PendingIntent.FLAG_IMMUTABLE or
                             PendingIntent.FLAG_UPDATE_CURRENT or
                             PendingIntent.FLAG_ONE_SHOT,
+                )
+
+                addAction(Notification.Action.Builder(
+                    null,
+                    context.getString(actionTextResId),
+                    actionPendingIntent,
+                ).build())
+            }
+
+            for ((actionTextResId, actionIntent) in activityActions) {
+                val actionPendingIntent = PendingIntent.getActivity(
+                    context,
+                    1,
+                    actionIntent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 )
 
                 addAction(Notification.Action.Builder(
