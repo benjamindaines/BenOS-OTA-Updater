@@ -24,7 +24,7 @@ class Preferences(initialContext: Context) {
     companion object {
         private val TAG = Preferences::class.java.simpleName
 
-        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/robertjohnson-test"
+        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/from-stock"
 
         // Keep in the same order as the helper functions below.
         private const val PREF_ALREADY_MIGRATED = "already_migrated"
