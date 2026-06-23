@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# benbackupd: privileged read helper for the updater's pre-uninstall backup.
+#
+# - Runs as system:system but that alone cannot read other apps' 0700 data;
+#   the capability DAC_READ_SEARCH is what grants traversal/read of any file.
+#   (DAC_READ_SEARCH is read-only: it cannot modify or chown anything, which
+#   keeps the blast radius small. Do NOT add DAC_OVERRIDE — backup only reads.)
+# - The seclabel puts it in its own domain (benbackupd) defined in benbackupd.te.
+# - init creates the SOCK_SEQPACKET socket /dev/socket/benbackupd. We set the
+#   group to "system" and mode 0660; actual access is gated by SELinux
+#   (custota_app is granted connectto via the custota-selinux patch).
+# - disabled + oneshot: we don't want it always running. The updater triggers it
+#   via `setprop ben.backup.start 1` right before conflict resolution, and it
+#   exits when idle. (Simplest: keep it always-on; see ALTERNATIVE below.)
+
+service benbackupd /system/bin/benbackupd
+    class main
+    user system
+    group system
+    seclabel u:r:benbackupd:s0
+    capabilities DAC_READ_SEARCH
+    socket benbackupd seqpacket 0660 system system u:object_r:benbackupd_socket:s0
+    oneshot
+    disabled
+
+# Start it on demand from the updater. The property trigger keeps it from
+# running except around an OTA. The app sets this property (allowed for
+# custota_app -> ctl/property via the selinux patch) before resolving conflicts.
+on property:ben.backup.start=1
+    start benbackupd
+
+# ALTERNATIVE (simpler, always-on): delete the two lines above plus `oneshot`
+# and `disabled`, leaving a long-lived daemon. Then no property/ctl plumbing is
+# needed. The socket-activation style above is only to minimize attack surface.

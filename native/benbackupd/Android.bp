@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Place this module in your device tree (e.g. device/benos/benbackupd/) and add
+// "benbackupd" to PRODUCT_PACKAGES.
+
+cc_binary {
+    name: "benbackupd",
+    srcs: ["benbackupd.cpp"],
+    shared_libs: [
+        "libbase",
+        "libcutils",
+        "liblog",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wextra",
+    ],
+    init_rc: ["benbackupd.rc"],
+    // Installed to /system/bin. If you prefer /system_ext or a vendor path,
+    // adjust file_contexts + the .te path accordingly.
+}

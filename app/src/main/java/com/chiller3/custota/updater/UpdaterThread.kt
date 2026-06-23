@@ -50,6 +50,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.math.roundToInt
 import androidx.core.net.toUri
+import com.chiller3.custota.backup.NeoBackupEngine
 
 class UpdaterThread(
     private val context: Context,
@@ -65,6 +66,10 @@ class UpdaterThread(
     private val authorization: String? = null
 
     private var logcatProcess: Process? = null
+        
+    private val backupEngine = NeoBackupEngine(context)
+    
+    private val backupPackages = emptyList<String>()
 
     // If we crash and restart while paused, the user will need to pause and unpause to resume
     // because update_engine does not report the pause state.
@@ -662,7 +667,8 @@ class UpdaterThread(
             Log.d(TAG, "OTA vbmeta digest: ${csigInfo.vbmetaDigest}")
             updateAvailable = csigInfo.vbmetaDigest != vbmetaDigest
         }
-
+        val backupPackages = updateInfo.backupApps
+        
         // If the running ROM's build timestamp is newer than the timestamp of the
         // published OTA, the device is already up to date and must not "update" to
         // an older build. Both values are UTC timestamps in seconds since the Unix
@@ -685,7 +691,8 @@ class UpdaterThread(
                 updateAvailable = true
             }
         }
-
+    
+    
         // Best-effort fetch of an optional message to show the user before installing. The file is
         // a Markdown document sitting alongside the device JSON. If it is absent, there is simply
         // no message. The file may also carry a hidden timestamp marker (see
@@ -722,6 +729,7 @@ class UpdaterThread(
             otaUri,
             csigInfo,
             message,
+            backupPackages,
         )
     }
 
@@ -752,7 +760,7 @@ class UpdaterThread(
     }
 
     /** Asynchronously trigger the update_engine payload application. */
-    private fun startInstallation(otaUri: Uri, csigInfo: CsigInfo) {
+    private fun startInstallation(otaUri: Uri, csigInfo: CsigInfo, backupPackages: List<String>) {
         val pfPayload = csigInfo.getOrThrow(OtaPaths.PAYLOAD_NAME)
         val pfPayloadMetadata = csigInfo.getOrThrow(OtaPaths.PAYLOAD_METADATA_NAME)
         val pfPayloadProperties = csigInfo.getOrThrow(OtaPaths.PAYLOAD_PROPERTIES_NAME)
@@ -817,6 +825,11 @@ class UpdaterThread(
                 )
             }
         } else {
+            
+            backupPackages.forEach { packageName ->
+                    backupEngine.backup(packageName)
+                }
+            
             updateEngine.applyPayload(
                 otaUri.toString(),
                 pfPayload.offset,
@@ -924,6 +937,7 @@ class UpdaterThread(
             } else if (status == UpdateEngineStatus.UPDATED_NEED_REBOOT) {
                 // The engine is already pending reboot from a previous run. Resolve any package
                 // conflicts before reminding the user to reboot, in case it wasn't done already.
+               // backupEngine.backup("com.google.android.apps.messaging")
                 resolvePackageConflicts()
 
                 // Resend success notification to remind the user to reboot. We can't perform any
@@ -964,10 +978,15 @@ class UpdaterThread(
                     // should not be "checking for updates".
                     listener.onUpdateProgress(this, ProgressType.UPDATE, 0, 0)
 
+		   // backupEngine.backup("com.google.android.apps.messaging")
+                    
+                 
                     startInstallation(
                         checkUpdateResult.otaUri,
                         checkUpdateResult.csigInfo,
+                        checkUpdateResult.backupPackages,
                     )
+
                 } else {
                     Log.w(TAG, "Monitoring existing update because engine is not idle")
                 }
@@ -989,7 +1008,7 @@ class UpdaterThread(
                         // booted on the old slot, so any conflicting user-installed app is still an
                         // ordinary /data/app package and can be cleanly uninstalled here, before the
                         // user is prompted to reboot into the new slot.
-                        resolvePackageConflicts()
+//                        resolvePackageConflicts()
 
                         listener.onUpdateResult(this, UpdateSucceeded)
                     }
@@ -1039,6 +1058,7 @@ class UpdaterThread(
         val otaUri: Uri,
         val csigInfo: CsigInfo,
         val message: String?,
+        val backupPackages: List<String>,
     )
 
     @Serializable
@@ -1084,11 +1104,8 @@ class UpdaterThread(
         val version: Int,
         val full: LocationInfo,
         val incremental: Map<String, LocationInfo> = emptyMap(),
-        // UTC timestamp (seconds since the Unix epoch) of when this update info
-        // file was written by custota-tool. Nullable with a default so that
-        // update info files predating this field continue to parse and behave
-        // exactly as before.
         val timestamp: Long? = null,
+        val backupApps: List<String>,
     )
 
     @Parcelize
