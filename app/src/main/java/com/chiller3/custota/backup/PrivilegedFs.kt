@@ -59,7 +59,7 @@ class PrivilegedFs(
     )
 
     private fun connect(): LocalSocket {
-        val s = LocalSocket(LocalSocket.SOCKET_SEQPACKET)
+        val s = LocalSocket(LocalSocket.SOCKET_STREAM)
         s.connect(LocalSocketAddress(socketName, LocalSocketAddress.Namespace.RESERVED))
         return s
     }

@@ -278,7 +278,11 @@ func serveClient(client int) {
 }
 
 func main() {
-	envName := "ANDROID_SOCKET_" + strings.ToUpper(socketName)
+	if f, err := os.OpenFile("/dev/kmsg", os.O_WRONLY, 0); err == nil {
+		log.SetOutput(f)
+	}
+
+	envName := "ANDROID_SOCKET_" + socketName
 	fdStr := os.Getenv(envName)
 	if fdStr == "" {
 		log.Fatalf("Failed to get control socket %s", socketName)
