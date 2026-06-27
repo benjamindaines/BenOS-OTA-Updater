@@ -1195,6 +1195,8 @@ class UpdaterThread(
                             // The custom OTA source is a one-shot: reset it to the default
                             // (disabled) after a successful update.
                             prefs.allowCustomOtaSource = false
+                            prefs.allowReinstall = false
+                            prefs.isDebugMode = false
                             listener.onUpdateResult(this, UpdateSucceeded)
                         }
                     }
