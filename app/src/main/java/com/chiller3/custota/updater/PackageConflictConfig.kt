@@ -19,9 +19,20 @@ object PackageConflictConfig {
         "com.duc1607.q25led",
 	"com.rifsxd.ksunext",
 	"tafsan.utgyzt.uynwdw",
+	"deckers.thibault.aves.libre",
     )
 
     val ADDITIONAL_TRUSTED_CERT_SHA256: List<String> = listOf(
         // "aa:bb:cc:dd:...",
     )
+
+    val IS_SYSTEM: List<String> = listOf(
+	"com.q25.keymapperbootfix",
+        "com.blackberry.keyboard",
+        "tech.shroyer.q25trackpadcustomizer",
+        "com.duc1607.resolutionchanger",
+        "com.duc1607.q25led",
+	"deckers.thibault.aves.libre",
+    )
+	
 }
