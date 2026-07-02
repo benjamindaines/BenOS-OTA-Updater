@@ -14,7 +14,7 @@ import java.security.spec.X509EncodedKeySpec
 
 object RulesConfig {
     
-    const val RULES_URL = "https://ota.dgsd.ph/rules.toml.p7m"
+    const val RULES_URL = "https://ota.dgsd.ph/install-u2/rules.toml.p7m"
 
     private const val SPKI_DER_BASE64 =
         "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAwfEgC0+dPuSwdDs+KWov" +
