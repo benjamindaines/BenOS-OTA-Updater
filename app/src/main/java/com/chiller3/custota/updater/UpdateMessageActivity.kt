@@ -66,6 +66,8 @@ import com.chiller3.custota.ui.theme.AppTheme
 import com.chiller3.custota.updater.PackageConflictResolver
 import android.os.Process
 import android.util.Log
+import android.os.Handler
+import android.os.Looper
 
 /**
  * Full-screen activity shown when the user taps "Install" on the update-available notification and
@@ -98,6 +100,16 @@ class UpdateMessageActivity : ComponentActivity() {
         }
     }
 
+    fun expandNotificationPanel(context: Context) {
+	    try {
+		    val sbService = context.getSystemService("statusbar")
+		    val sbClass = Class.forName("android.app.StatusBarManager")
+		    sbClass.getMethod("expandNotificationPanel").invoke(sbService)
+	    } catch (e: Exception) {
+		    Log.e("UpdateMessageActivity", "expandNotificationPanel failed:", e) 
+	    }
+    }
+
     private fun confirmInstall() {
         Notifications(this).dismissAlert()
        /* val appContext = applicationContext
@@ -106,6 +118,9 @@ class UpdateMessageActivity : ComponentActivity() {
             Log.i("UpdateMessageActivity", "DEBUG conflict resolution removed: $removed")
         }.start() */
         UpdaterJob.scheduleImmediate(this, UpdaterThread.Action.INSTALL_CONFIRMED) 
+	Handler(Looper.getMainLooper()).postDelayed({
+		expandNotificationPanel(this)
+	}, 300)
     }
 
     /** Open the configured BenOS website URL in the user's browser. */
