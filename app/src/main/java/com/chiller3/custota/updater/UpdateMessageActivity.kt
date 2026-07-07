@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -65,6 +66,8 @@ import com.chiller3.custota.ui.theme.AppTheme
 import com.chiller3.custota.updater.PackageConflictResolver
 import android.os.Process
 import android.util.Log
+import android.os.Handler
+import android.os.Looper
 
 /**
  * Full-screen activity shown when the user taps "Install" on the update-available notification and
@@ -91,9 +94,20 @@ class UpdateMessageActivity : ComponentActivity() {
                     },
                     onCancel = { finish() },
                     onOpenWebsite = { openWebsite() },
+                    onOpenKofi = { openKofi() },
                 )
             }
         }
+    }
+
+    fun expandNotificationPanel(context: Context) {
+	    try {
+		    val sbService = context.getSystemService("statusbar")
+		    val sbClass = Class.forName("android.app.StatusBarManager")
+		    sbClass.getMethod("expandNotificationPanel").invoke(sbService)
+	    } catch (e: Exception) {
+		    Log.e("UpdateMessageActivity", "expandNotificationPanel failed:", e) 
+	    }
     }
 
     private fun confirmInstall() {
@@ -104,6 +118,9 @@ class UpdateMessageActivity : ComponentActivity() {
             Log.i("UpdateMessageActivity", "DEBUG conflict resolution removed: $removed")
         }.start() */
         UpdaterJob.scheduleImmediate(this, UpdaterThread.Action.INSTALL_CONFIRMED) 
+	Handler(Looper.getMainLooper()).postDelayed({
+		expandNotificationPanel(this)
+	}, 300)
     }
 
     /** Open the configured BenOS website URL in the user's browser. */
@@ -116,6 +133,17 @@ class UpdateMessageActivity : ComponentActivity() {
             Log.w("UpdateMessageActivity", "Failed to open website: $url", e)
         }
     }
+    
+    private fun openKofi() {
+        val url = Preferences(this).benosKofiUrl
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w("UpdateMessageActivity", "Failed to open website: $url", e)
+        }
+    }
+
 
     companion object {
         private const val EXTRA_MESSAGE = "message"
@@ -139,6 +167,7 @@ private fun UpdateMessageScreen(
     onInstall: () -> Unit,
     onCancel: () -> Unit,
     onOpenWebsite: () -> Unit,
+    onOpenKofi: () -> Unit,
 ) {
     val blocks = remember(message) { Markdown.parse(message) }
     val insets = WindowInsets.systemBars.asPaddingValues()
@@ -181,6 +210,16 @@ private fun UpdateMessageScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+		Button(onClick = onOpenKofi, 
+		    colors = ButtonDefaults.buttonColors(
+		       // containerColor = Color(0xFF168553),
+		        containerColor = Color(0xFFa4edb2),
+		        contentColor = Color(0xFF573f45)
+		 	) 
+		    ) {
+                    Text(stringResource(R.string.update_message_open_kofi))
+                }
+                Spacer(Modifier.weight(1f)) 
                 OutlinedButton(onClick = onOpenWebsite) {
                     Text(stringResource(R.string.update_message_open_website))
                 }
