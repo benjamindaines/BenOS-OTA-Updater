@@ -542,19 +542,24 @@ class UpdaterThread(
 
             val capture = mutableListOf<String>()
             val conflict = mutableListOf<String>()
+            val conflictSystemFlags = mutableMapOf<String, Boolean>()
             for (rule in rulesFile.rules) {
                 if (!ruleInEffect(rule, romTimestamp, otaTimestamp)) {
                     continue
                 }
                 when (rule.action) {
                     "capture" -> capture.add(rule.pkg)
-                    "conflict" -> conflict.add(rule.pkg)
+                    "conflict" -> {
+                        conflict.add(rule.pkg)
+                        // Last in-effect rule for a package wins.
+                        conflictSystemFlags[rule.pkg] = rule.backupAsSystem
+                    }
                     else -> Log.w(TAG, "Ignoring rule with unknown action: ${rule.action}")
                 }
             }
 
             Log.d(TAG, "Rules: ${capture.size} capture, ${conflict.size} conflict")
-            ResolvedRules(capture.distinct(), conflict.distinct())
+            ResolvedRules(capture.distinct(), conflict.distinct(), conflictSystemFlags)
         } catch (e: Exception) {
             Log.w(TAG, "Rules unavailable; failing closed to the hard-coded floor", e)
             ResolvedRules.EMPTY
@@ -1045,6 +1050,13 @@ class UpdaterThread(
             val conflictPackages =
                 (PackageConflictConfig.PACKAGE_NAMES + rules.conflictExtra).distinct()
 
+            // Whether a conflict's backup is marked as a system app: an in-effect
+            // rule wins; otherwise fall back to the hard-coded IS_SYSTEM floor. A
+            // rule that lists a conflict without the field defaults to system
+            // (RuleEntry.backupAsSystem = true), matching the common case.
+            fun backupAsSystem(pkg: String): Boolean =
+                rules.conflictSystemFlags[pkg] ?: (pkg in PackageConflictConfig.IS_SYSTEM)
+
             val result = PackageConflictResolver(context).resolveConflicts(
                 conflictPackages,
             ) onBeforeUninstall@{ pkg ->
@@ -1052,7 +1064,7 @@ class UpdaterThread(
                     // Already backed up this cycle (capture lane or an earlier conflict).
                     return@onBeforeUninstall true
                 }
-                val backedUp = backupEngine.backup(pkg) != null
+                val backedUp = backupEngine.backup(pkg, markAsSystem = backupAsSystem(pkg)) != null
                 if (backedUp) {
                     captureOnce.add(pkg)
                 } else {
@@ -1257,6 +1269,15 @@ class UpdaterThread(
         val action: String,
         val timestamp: Long? = null,
         val oneshot: Boolean = false,
+        // For "conflict" rules only: whether the pre-uninstall backup should be
+        // marked as a system app in its NeoBackup properties. Defaults to true
+        // because a conflicting user app is almost always being replaced by a
+        // same-named *system* app shipped in the OTA. Set false for the rare case
+        // where the replacement stays a user app (e.g. the KernelSU-Next app), so
+        // the backup restores as a user app instead. Ignored for non-conflict
+        // actions.
+        @SerialName("backup_as_system")
+        val backupAsSystem: Boolean = true,
     )
 
     /** The signed rules document (canonical JSON inside the CMS envelope). */
@@ -1270,9 +1291,13 @@ class UpdaterThread(
     private data class ResolvedRules(
         val captureList: List<String>,
         val conflictExtra: List<String>,
+        // package -> whether its pre-uninstall backup should be marked as a system
+        // app. Only populated for packages that appeared in an in-effect "conflict"
+        // rule; the hard-coded floor is consulted for anything absent here.
+        val conflictSystemFlags: Map<String, Boolean> = emptyMap(),
     ) {
         companion object {
-            val EMPTY = ResolvedRules(emptyList(), emptyList())
+            val EMPTY = ResolvedRules(emptyList(), emptyList(), emptyMap())
         }
     }
 

@@ -201,6 +201,13 @@ struct Rule {
     /// one-time migration). If false, it fires on every update once that build has
     /// been reached (a standing rule).
     oneshot: bool,
+    /// Conflict lane only: whether the pre-uninstall backup is marked as a system
+    /// app in its NeoBackup properties (so it restores as one). The device defaults
+    /// this to true, so it is skipped when true to keep existing output
+    /// byte-identical; it is only emitted when false (e.g. the KernelSU-Next app,
+    /// whose replacement stays a user app). Meaningless for capture rules.
+    #[serde(skip_serializing_if = "is_true")]
+    backup_as_system: bool,
 }
 
 /// The signed rules document: canonical JSON wrapped in the same CMS envelope
@@ -232,6 +239,13 @@ struct RawRule {
     /// its build is reached). Set true for a one-time migration.
     #[serde(default)]
     oneshot: bool,
+    /// Conflict lane only. Whether the pre-uninstall backup should be marked as a
+    /// system app so it restores as one. Optional, defaults to true (the
+    /// replacement is almost always a same-named system app shipped in the OTA).
+    /// Set false when the replacement stays a user app, e.g. the KernelSU-Next app.
+    /// Ignored (and warned about) for capture rules.
+    #[serde(default = "default_true")]
+    backup_as_system: bool,
 }
 
 /// A `timestamp` value in the source TOML: either an explicit epoch (integer) or a
@@ -1005,6 +1019,18 @@ fn resolve_timestamp(
     Ok(ts)
 }
 
+/// serde default for `RawRule::backup_as_system`: true, matching the device's
+/// own default for the field.
+fn default_true() -> bool {
+    true
+}
+
+/// serde `skip_serializing_if` predicate: omit `Rule::backup_as_system` when it is
+/// true (the device's default), so existing rules serialize byte-identically.
+fn is_true(b: &bool) -> bool {
+    *b
+}
+
 fn validate_and_build_rules(
     toml_doc: &RulesToml,
     default_timestamp: Option<i64>,
@@ -1042,11 +1068,29 @@ fn validate_and_build_rules(
             }
         }
 
+        // Only the conflict lane consults backup_as_system. Guard against it being
+        // set on a capture rule, where it is meaningless, and normalize to the
+        // default so it is never emitted for capture rules.
+        let backup_as_system = match action {
+            Action::Conflict => raw.backup_as_system,
+            Action::Capture => {
+                if !raw.backup_as_system {
+                    warn!(
+                        "Ignoring backup_as_system=false on capture rule for {:?} \
+                         (only meaningful for conflict rules)",
+                        raw.package,
+                    );
+                }
+                true
+            }
+        };
+
         rules.push(Rule {
             package: raw.package.clone(),
             action,
             timestamp,
             oneshot: raw.oneshot,
+            backup_as_system,
         });
     }
 

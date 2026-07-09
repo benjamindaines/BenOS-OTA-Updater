@@ -44,7 +44,19 @@ class NeoBackupEngine(
     private val LINK_MASK = 0b0_001_010_000_000_000_000  // 0120000 S_IFLNK
 
   
-    fun backup(packageName: String, userId: Int = BackupConfig.USER_ID): File? {
+    /**
+     * @param markAsSystem When non-null, forces the `isSystem` flag written into the
+     *   backup's NeoBackup properties instead of inferring it. Used by the conflict
+     *   lane so a remote rule can decide whether the replacement is a system app
+     *   (the common case) or stays a user app (e.g. the KernelSU-Next app). When
+     *   null, the prior inference (hard-coded IS_SYSTEM floor OR the live app flags)
+     *   is preserved.
+     */
+    fun backup(
+        packageName: String,
+        userId: Int = BackupConfig.USER_ID,
+        markAsSystem: Boolean? = null,
+    ): File? {
         return try {
             val appInfo = pm.getApplicationInfo(packageName, 0)
             val pkgInfo = pm.getPackageInfo(packageName, 0)
@@ -114,8 +126,9 @@ class NeoBackupEngine(
                 profileId = userId,
                 sourceDir = appInfo.sourceDir,
                 splitSourceDirs = appInfo.splitSourceDirs ?: arrayOf(),
-                isSystem = packageName in PackageConflictConfig.IS_SYSTEM || (appInfo.flags and
-                        (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0,
+                isSystem = markAsSystem ?: (packageName in PackageConflictConfig.IS_SYSTEM ||
+                        (appInfo.flags and (ApplicationInfo.FLAG_SYSTEM or
+                        ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0),
                 backupDate = now,
                 hasApk = hasApk,
                 hasAppData = hasData,
