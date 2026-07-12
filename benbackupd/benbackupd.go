@@ -195,6 +195,26 @@ func handleRead(client int, path string) {
 		writeAll(client, []byte{1})
 		return
 	}
+	streamRegularFile(client, path)
+}
+
+// Fixed path for the 'S' (settings) op. Kept out of allowedRoots on purpose: the
+// backup path allowlist must not grow to cover /data/system, so this one
+// system_data_file is exposed only through its own op and nothing else.
+const settingsGlobalPath = "/data/system/users/0/settings_global.xml"
+
+// handleReadSettings streams exactly settingsGlobalPath, ignoring any client path.
+// This is the disk-flush barrier for the airplane-across-OTA gate: the file only
+// reflects a settings write after SettingsProvider's batched flush fires, so reading
+// it confirms the write reached disk. Requires the benbackupd domain to hold
+// `system_data_file:file { getattr open read }` and `system_data_file:dir search`.
+func handleReadSettings(client int) {
+	streamRegularFile(client, settingsGlobalPath)
+}
+
+// streamRegularFile opens path O_RDONLY|O_NOFOLLOW and streams it with the 'R' reply
+// shape: u8 status (0 ok / 1 error), then on ok u64 size followed by size bytes.
+func streamRegularFile(client int, path string) {
 	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		writeAll(client, []byte{1})
@@ -274,6 +294,9 @@ func serveClient(client int) {
 		handleList(client, path)
 	case 'R':
 		handleRead(client, path)
+	case 'S':
+		// Fixed-path settings read (airplane-across-OTA barrier). Path field ignored.
+		handleReadSettings(client)
 	}
 }
 

@@ -125,6 +125,31 @@ class PrivilegedFs(
             return total
         }
     }
+	
+
+    // use backup daemon (already privilaged) to read if the setting for airplane mode has been written
+    // additionl scope of benbackupd is limited to just this file. not given access to the entire system
+    // filesystem
+    fun readSettingsGlobal(): String {
+        connect().use { sock ->
+            sock.outputStream.write(request('S', ""))
+            sock.outputStream.flush()
+            val input = DataInputStream(sock.inputStream)
+            val status = input.read()
+            if (status != 0) throw java.io.IOException("benbackupd could not read settings_global (status=$status)")
+            var remaining = readU64(input)
+            val bytes = java.io.ByteArrayOutputStream(remaining.coerceAtMost(1 shl 20).toInt())
+            val buf = ByteArray(64 * 1024)
+            while (remaining > 0) {
+                val want = minOf(remaining, buf.size.toLong()).toInt()
+                val n = input.read(buf, 0, want)
+                if (n < 0) throw EOFException("short read on settings_global, $remaining left")
+                bytes.write(buf, 0, n)
+                remaining -= n
+            }
+            return bytes.toString(Charsets.UTF_8.name())
+        }
+    }
 
     private fun skipErrorRecord(input: DataInputStream) {
         // error record: u16 relLen, rel  (so we can log which path failed)

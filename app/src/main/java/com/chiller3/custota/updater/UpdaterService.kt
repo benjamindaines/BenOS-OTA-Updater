@@ -66,7 +66,19 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
                     updaterThread?.cancel()
                 }
                 ACTION_REBOOT -> {
-                    getSystemService(PowerManager::class.java).reboot(null)
+
+		    // Airplane mode toggle fits in here, after user clicks reboot on the notification
+		    // update is complete at this point, and we can be sure that killing the network
+		    // will not inconvenience the user once they've already affirmed the reboot. 
+                    Thread {
+                        if (AirplaneOtaGate.armForRebootIfProtected(applicationContext)) {
+                            getSystemService(PowerManager::class.java).reboot(null)
+                        } else {
+                            // Flush unconfirmed: do NOT boot possibly-unprotected. Re-surface
+                            // the reboot prompt so the user can retry from a Wallet-safe state.
+                            handler.post { notifyAlert(UpdaterThread.UpdateNeedReboot) }
+                        }
+                    }.apply { name = "AirplaneOtaGate-reboot" }.start()
                 }
                 ACTION_SCHEDULE -> {
                     UpdaterJob.scheduleImmediate(this, IntentCompat.getParcelableExtra(
