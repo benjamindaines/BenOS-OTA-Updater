@@ -9,7 +9,7 @@ package com.chiller3.custota.backup
 object BackupConfig {
 
     
-    const val BACKUP_ROOT = "/storage/emulated/0/BenOSBackup"
+    const val BACKUP_ROOT = "/storage/emulated/0/NeoBackup"
 
     const val USER_ID = 0
 
