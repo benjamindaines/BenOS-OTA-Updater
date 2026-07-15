@@ -28,6 +28,7 @@ object AirplaneOtaGate {
         // "BenOS-Q25-2025.12.14",
    	   "BenOS-Valarie_stockInstaller",
 	   "BenOS-Valarie_umaInstaller",
+	   "BenOS-V-test",
     )
 
     private const val ABORT_REBOOT_ON_TIMEOUT = true

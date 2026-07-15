@@ -56,7 +56,6 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
                     // returns.
                     updateForegroundNotification(false)
 
-                    startUpdate(intent)
                 }
                 ACTION_PAUSE, ACTION_RESUME -> {
                     updaterThread?.isPaused = action == ACTION_PAUSE
@@ -103,6 +102,12 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
             val action = IntentCompat.getParcelableExtra(
                 intent, EXTRA_ACTION, UpdaterThread.Action::class.java)!!
             val silent = intent.getBooleanExtra(EXTRA_SILENT, false)
+            Thread {
+                val ok = AirplaneOtaGate.armForRebootIfProtected(applicationContext) 
+     	      	Log.i(TAG, "DebugAirplane Test $ok")
+             }.apply { name = "AirplaneOtaGate-debug" }.start()
+
+                 startUpdate(intent)
 
             if (action != UpdaterThread.Action.MONITOR) {
                 val otaSource = prefs.effectiveOtaSource
