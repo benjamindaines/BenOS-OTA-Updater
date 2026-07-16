@@ -85,6 +85,10 @@ class UpdaterThread(
             }
         }
 
+    // Rules resolved during the most recent update check, consumed by
+    // resolvePackageConflicts() once the engine reports success.
+    private var rules: ResolvedRules = ResolvedRules.EMPTY
+
     private val engineStatusLock = ReentrantLock()
     private val engineStatusCondition = engineStatusLock.newCondition()
     private var engineStatus = -1
@@ -1127,7 +1131,6 @@ class UpdaterThread(
                 // further operations besides reverting.
                 listener.onUpdateResult(this, UpdateNeedReboot)
             } else {
-		var rules: ResolvedRules = ResolvedRules.EMPTY
                 if (status == UpdateEngineStatus.IDLE) {
                     if (action == Action.MONITOR) {
                         // Nothing to do.
@@ -1235,7 +1238,7 @@ class UpdaterThread(
             wakeLock.release()
             unbind()
 
-            try {
+             try {
                 stopLogcat()
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to dump logcat", e)

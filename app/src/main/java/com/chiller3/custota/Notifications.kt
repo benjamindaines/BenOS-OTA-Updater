@@ -37,9 +37,11 @@ class Notifications(
     private fun createPersistentChannel() = NotificationChannel(
         CHANNEL_ID_PERSISTENT,
         context.getString(R.string.notification_channel_persistent_name),
-        NotificationManager.IMPORTANCE_LOW,
+        NotificationManager.IMPORTANCE_HIGH,
     ).apply {
         description = context.getString(R.string.notification_channel_persistent_desc)
+	setSound(null, null)
+	enableVibration(false)
     }
 
     private fun createCheckAlertsChannel() = NotificationChannel(
