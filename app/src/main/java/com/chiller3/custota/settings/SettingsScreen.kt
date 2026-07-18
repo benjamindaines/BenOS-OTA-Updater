@@ -50,6 +50,7 @@ import com.chiller3.custota.ui.PreferenceColumn
 import com.chiller3.custota.ui.SwitchPreference
 import com.chiller3.custota.ui.betterSegmentedShapes
 import com.chiller3.custota.ui.theme.AppTheme
+import com.chiller3.custota.updater.BetaExpiry
 import com.chiller3.custota.updater.OtaPaths
 import com.chiller3.custota.updater.UpdaterJob
 import com.chiller3.custota.updater.UpdaterThread
@@ -295,6 +296,27 @@ private fun SettingsContent(
     var showOtaSourceDialog by rememberSaveable { mutableStateOf(false) }
 
     PreferenceColumn(contentPadding = contentPadding) {
+        // Beta build notice, shown only on time-limited beta builds. States the deadline and the
+        // action taken if the device has not moved to another build by then. Non-interactive.
+        if (Preferences.BETA_BUILD) {
+            item(key = "beta_notice") {
+                Preference(
+                    onClick = {},
+                    shapes = BetterSegmentedShapes.single(),
+                    title = { Text(text = stringResource(R.string.pref_beta_notice_name)) },
+                    summary = {
+                        Text(
+                            text = stringResource(
+                                R.string.pref_beta_notice_desc,
+                                BetaExpiry.formattedExpiryDate(),
+                            )
+                        )
+                    },
+                    modifier = Modifier.animateItem(),
+                )
+            }
+        }
+
         item(key = "general") {
             PreferenceCategory(
                 title = { Text(text = stringResource(R.string.pref_header_general)) },

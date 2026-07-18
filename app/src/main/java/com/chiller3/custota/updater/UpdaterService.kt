@@ -381,9 +381,27 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
         )
     }
 
+    /**
+     * Record completion of the beta cross-grade so that it is not attempted again and the expiry
+     * notifications are suppressed. [UpdaterThread.UpdateNeedReboot] counts as completion because it
+     * indicates an installation is already staged and awaiting reboot.
+     */
+    private fun recordBetaCrossGrade(action: UpdaterThread.Action, result: UpdaterThread.Result) {
+        if (action != UpdaterThread.Action.INSTALL_BETA) {
+            return
+        }
+
+        if (result == UpdaterThread.UpdateSucceeded || result == UpdaterThread.UpdateNeedReboot) {
+            Log.i(TAG, "Beta cross-grade staged; awaiting reboot")
+            prefs.betaCrossGradeStaged = true
+            UpdaterJob.scheduleBeta(this)
+        }
+    }
+
     override fun onUpdateResult(thread: UpdaterThread, result: UpdaterThread.Result) {
         handler.post {
             require(thread === updaterThread) { "Bad thread ($thread != $updaterThread)" }
+            recordBetaCrossGrade(thread.action, result)
             notifyAlert(result)
             threadExited()
         }

@@ -25,11 +25,15 @@ class Notifications(
         const val CHANNEL_ID_FAILURE = "failure"
         const val CHANNEL_ID_SUCCESS = "success"
         const val CHANNEL_ID_CLEANUP = "cleanup"
+        const val CHANNEL_ID_BETA = "beta"
 
         private val LEGACY_CHANNEL_IDS = arrayOf<String>()
 
         const val ID_PERSISTENT = 1
         const val ID_ALERT = 2
+        // Distinct from ID_ALERT so that beta expiry notices neither overwrite nor are overwritten
+        // by ordinary update alerts.
+        const val ID_BETA = 3
     }
 
     private val notificationManager = context.getSystemService(NotificationManager::class.java)
@@ -68,6 +72,14 @@ class Notifications(
         description = context.getString(R.string.notification_channel_success_desc)
     }
 
+    private fun createBetaChannel() = NotificationChannel(
+        CHANNEL_ID_BETA,
+        context.getString(R.string.notification_channel_beta_name),
+        NotificationManager.IMPORTANCE_HIGH,
+    ).apply {
+        description = context.getString(R.string.notification_channel_beta_desc)
+    }
+
     private fun createCleanupAlertsChannel() = NotificationChannel(
         CHANNEL_ID_CLEANUP,
         context.getString(R.string.notification_channel_cleanup_name),
@@ -88,6 +100,7 @@ class Notifications(
             createFailureAlertsChannel(),
             createSuccessAlertsChannel(),
             createCleanupAlertsChannel(),
+            createBetaChannel(),
         ))
         LEGACY_CHANNEL_IDS.forEach { notificationManager.deleteNotificationChannel(it) }
     }
@@ -233,6 +246,30 @@ class Notifications(
         }
 
         notificationManager.notify(ID_ALERT, notification)
+    }
+
+    /**
+     * Post a high-priority beta expiry notice. Tapping it opens the settings screen, where the
+     * persistent beta notice states the same deadline.
+     */
+    fun sendBetaAlert(title: String, message: String) {
+        val notificationIntent = Intent(context, SettingsActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            context, ID_BETA, notificationIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = Notification.Builder(context, CHANNEL_ID_BETA).run {
+            setContentTitle(title)
+            setContentText(message)
+            style = Notification.BigTextStyle().bigText(message)
+            setSmallIcon(R.drawable.ic_notifications)
+            setContentIntent(pendingIntent)
+            setAutoCancel(true)
+            setVisibility(Notification.VISIBILITY_PUBLIC)
+            build()
+        }
+
+        notificationManager.notify(ID_BETA, notification)
     }
 
     fun dismissAlert() {

@@ -32,6 +32,11 @@ object PostUnlockInit {
 
         UpdaterJob.schedulePeriodic(context, false)
 
+        // Arm (or, once the build is no longer a beta or the cross-grade has been staged, cancel)
+        // the beta expiry notification jobs. Latencies are re-derived against the current clock and
+        // time zone on each invocation.
+        UpdaterJob.scheduleBeta(context)
+
         updateShortcuts(context)
     }
 

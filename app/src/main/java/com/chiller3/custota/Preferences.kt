@@ -24,13 +24,58 @@ class Preferences(initialContext: Context) {
     companion object {
         private val TAG = Preferences::class.java.simpleName
 
-        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/mainline"
+        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/testing-val"
 
         // URL opened by the "Open BenOS Website" button on the update message
         // screen. Edit this to point at the real BenOS website. It can also be
         // overridden at runtime via the [benosWebsiteUrl] setter.
         const val DEFAULT_BENOS_WEBSITE_URL = "https://ds.dgsd.ph/benos"
         const val DEFAULT_BENOS_KOFI_URL = "https://ko-fi.com/ben9412345"
+
+        // --- Beta build expiry configuration ---------------------------------
+        //
+        // Compile-time constants set when building a time-limited beta (debug)
+        // ROM. When [BETA_BUILD] is false the entire mechanism is inert: no
+        // banner, no notifications, and no scheduled cross-grade. Runtime
+        // resolution lives in [com.chiller3.custota.updater.BetaExpiry].
+
+        // Marks the running build as a time-limited beta. The stable build to
+        // which the device is cross-graded ships this as false, which is what
+        // makes the operation one-shot: after reboot nothing re-arms.
+        const val BETA_BUILD = true
+
+        // Expiry deadline expressed as a local calendar date rather than an
+        // absolute Unix timestamp. Resolution against the device's active time
+        // zone means the deadline is observed at local time on the given date
+        // regardless of the zone the device currently reports.
+        const val BETA_EXPIRY_YEAR = 2026
+        const val BETA_EXPIRY_MONTH = 9    // 1-12
+        const val BETA_EXPIRY_DAY = 1
+
+        // Local hour of day (0-23) at which the cross-grade becomes eligible on
+        // the expiry date, and at which the day-before warning is posted. 03:00
+        // is selected as a low-activity window: devices are predominantly idle
+        // and connected to unmetered networks overnight, which minimizes both
+        // the probability of a user-initiated reboot during installation and
+        // the risk of consuming a metered data allowance. This value defines
+        // only the earliest eligible instant; the job constraints in
+        // [com.chiller3.custota.updater.UpdaterJob.scheduleBeta] provide the
+        // actual guarantees.
+        const val BETA_EXPIRY_INSTALL_HOUR = 3
+
+        // Update source used for the automatic cross-grade. This is the stable
+        // (non-debug) branch, and is independent of whatever source the user has
+        // configured. A full OTA is served here deliberately: an incremental is
+        // keyed to one exact source build, whereas the cross-grade must succeed
+        // from any beta respin. Publishing no incremental entry matching a beta's
+        // vbmeta digest causes the updater to select the full package.
+        const val BETA_FALLBACK_OTA_URL = "https://ota.dgsd.ph/mainline"
+
+        // Days after the expiry deadline before the device is considered overdue
+        // and the user is notified that the cross-grade has not yet completed.
+        // The cross-grade requires an unmetered network, so a device kept on
+        // cellular alone will stall indefinitely without this escalation.
+        const val BETA_ESCALATION_GRACE_DAYS = 3L
 
         // Keep in the same order as the helper functions below.
         private const val PREF_ALREADY_MIGRATED = "already_migrated"
@@ -48,6 +93,7 @@ class Preferences(initialContext: Context) {
         private const val PREF_BENOS_WEBSITE_URL = "benos_website_url"
         private const val PREF_BENOS_KOFI_URL = "benos_kofi_url"
         private const val PREF_OTA_SERVER_URL = "ota_server_url"
+        private const val PREF_BETA_CROSSGRADE_STAGED = "beta_crossgrade_staged"
 
         private fun migrateToDeviceProtectedStorage(context: Context) {
             synchronized(this) {
@@ -168,6 +214,17 @@ class Preferences(initialContext: Context) {
         } else {
             defaultOtaSource ?: otaSource
         }
+
+    /**
+     * Whether the automatic beta cross-grade has completed and its result is staged for reboot.
+     *
+     * Set when an [com.chiller3.custota.updater.UpdaterThread.Action.INSTALL_BETA] run succeeds.
+     * Read by the escalation job to distinguish a device awaiting reboot from one whose cross-grade
+     * has not yet run, since the latter warrants notifying the user.
+     */
+    var betaCrossGradeStaged: Boolean
+        get() = prefs.getBoolean(PREF_BETA_CROSSGRADE_STAGED, false)
+        set(staged) = prefs.edit { putBoolean(PREF_BETA_CROSSGRADE_STAGED, staged) }
 
     /** Whether to check for updates periodically. */
     var automaticCheck: Boolean

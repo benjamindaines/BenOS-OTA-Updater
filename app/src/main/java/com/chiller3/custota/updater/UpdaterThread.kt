@@ -55,7 +55,8 @@ import com.chiller3.custota.backup.NeoBackupEngine
 class UpdaterThread(
     private val context: Context,
     private val network: Network?,
-    private val action: Action,
+    // Visible to UpdaterService, which records completion of a beta cross-grade.
+    val action: Action,
     private val listener: UpdaterThreadListener,
 ) : Thread() {
     private val updateEngine = IUpdateEngine.Stub.asInterface(
@@ -64,6 +65,23 @@ class UpdaterThread(
     private val prefs = Preferences(context)
     // NOTE: This is not implemented.
     private val authorization: String? = null
+
+    // Update source used for this run. The automatic beta cross-grade targets the stable branch
+    // regardless of the configured source; every other action uses the configured effective source.
+    // The override applies to this run only and does not persist, leaving the user's configured
+    // source untouched.
+    private val runtimeOtaSource: Uri?
+        get() = if (action == Action.INSTALL_BETA) {
+            BetaExpiry.fallbackOtaUri
+        } else {
+            prefs.effectiveOtaSource
+        }
+
+    // Whether an OTA that does not appear newer than the running build is nonetheless installed.
+    // The cross-grade requires this: the stable target may carry an older build timestamp than the
+    // beta being replaced, which would otherwise be rejected as a downgrade.
+    private val forceReinstall: Boolean
+        get() = action == Action.INSTALL_BETA
 
     private var logcatProcess: Process? = null
         
@@ -722,7 +740,7 @@ class UpdaterThread(
 
     /** Synchronously check for updates. */
     private fun checkForUpdates(): CheckUpdateResult {
-        val baseUri = prefs.effectiveOtaSource ?: throw IllegalStateException("No URI configured")
+        val baseUri = runtimeOtaSource ?: throw IllegalStateException("No URI configured")
         val updateInfoUri = resolveUri(baseUri, "${Build.DEVICE}.json")
         Log.d(TAG, "Update info URI: $updateInfoUri")
 
@@ -804,8 +822,11 @@ class UpdaterThread(
         if (!updateAvailable) {
             Log.w(TAG, "Already up to date")
 
-            if (prefs.allowReinstall) {
-                Log.w(TAG, "Reinstalling at user's request")
+            // forceReinstall covers the cross-grade's equal-fingerprint and older-timestamp cases,
+            // in which the stable target does not present as an update relative to the beta.
+            if (prefs.allowReinstall || forceReinstall) {
+                Log.w(TAG, "Reinstalling (allowReinstall=${prefs.allowReinstall}, " +
+                        "forceReinstall=$forceReinstall)")
                 updateAvailable = true
             }
         }
@@ -1362,16 +1383,29 @@ class UpdaterThread(
          * Like [INSTALL], but the user has already acknowledged the update message, so the message
          * gate in [run] is bypassed. Scheduled by [UpdateMessageActivity].
          */
-        INSTALL_CONFIRMED;
+        INSTALL_CONFIRMED,
+
+        /**
+         * Automatic beta cross-grade to the stable branch. The update source is overridden to
+         * [BetaExpiry.fallbackOtaUri] and downgrade protection is bypassed for this run only,
+         * without mutating any persisted preference. The automatic-install preference is not
+         * consulted, since this action is scheduled explicitly rather than by the periodic check.
+         * The message gate in [run] is bypassed, the action being neither [CHECK] nor [INSTALL].
+         * Scheduled by [UpdaterJob.scheduleBeta] once the beta deadline is reached.
+         */
+        INSTALL_BETA;
 
         val requiresNetwork: Boolean
-            get() = this == CHECK || this == INSTALL || this == INSTALL_CONFIRMED
+            get() = this == CHECK || this == INSTALL || this == INSTALL_CONFIRMED ||
+                    this == INSTALL_BETA
 
+        // The cross-grade downloads a full OTA, so it is subject to the same unmetered-network
+        // treatment as an ordinary installation.
         val performsLargeDownloads: Boolean
-            get() = this == INSTALL || this == INSTALL_CONFIRMED
+            get() = this == INSTALL || this == INSTALL_CONFIRMED || this == INSTALL_BETA
 
         val usesSignificantBattery: Boolean
-            get() = this == INSTALL || this == INSTALL_CONFIRMED
+            get() = this == INSTALL || this == INSTALL_CONFIRMED || this == INSTALL_BETA
     }
 
     sealed interface Result
