@@ -38,6 +38,7 @@ object BackupConfig {
     val EXCLUDED_NAMES_ANYWHERE: List<String> = listOf(
         "com.google.android.gms.appid.xml",
         "com.machiav3lli.backup.xml",
+	"PhenotypePrefs.xml",
         "trash",
         ".thumbnails",
     )

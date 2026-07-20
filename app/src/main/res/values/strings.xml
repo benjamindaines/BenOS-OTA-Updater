@@ -124,11 +124,11 @@
 
     <!-- Beta build -->
     <string name="pref_beta_notice_name">Beta build</string>
-    <string name="pref_beta_notice_desc">This is a beta build of BenOS and expires on %1$s. If this device has not moved to a newer beta or a stable release by then, it will automatically install the stable, non-debug build and prompt you to reboot. This clears out the debug-only settings, such as permissive security policy and verbose logging, that would otherwise keep filling storage. The update only downloads over Wi-Fi.</string>
+    <string name="pref_beta_notice_desc">This is a beta build of BenOS and expires on %1$s. If this device has not moved to a newer beta or a stable release by then, it will automatically install the current stable, non-debug build and prompt you to reboot.</string>
     <string name="notification_channel_beta_name">Beta expiry alerts</string>
     <string name="notification_channel_beta_desc">Alerts about a beta build approaching or passing its expiry date</string>
     <string name="notification_beta_expiry_warning_title">Beta build expires tomorrow</string>
-    <string name="notification_beta_expiry_warning_message">This beta build of BenOS expires on %1$s. Unless this device is updated first, it will automatically install the stable build over Wi-Fi and ask you to reboot. To choose a different build instead, update before the deadline.</string>
+    <string name="notification_beta_expiry_warning_message">This beta build of BenOS expires on %1$s. Unless this device is updated first, it will automatically install the stable build over Wi-Fi and ask you to reboot.</string>
     <string name="notification_beta_expiry_overdue_title">Connect to Wi-Fi to finish updating</string>
     <string name="notification_beta_expiry_overdue_message">This beta build of BenOS expired on %1$s, but the stable build has not been installed yet. The update only downloads over Wi-Fi, so connect to a Wi-Fi network to let it finish.</string>
 
