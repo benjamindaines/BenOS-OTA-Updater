@@ -1113,6 +1113,34 @@ class UpdaterThread(
         }
     }
 
+    /**
+     * Run post-payload conflict resolution for a staged update and return the result to report.
+     *
+     * Invoked immediately after the engine stages a new slot and, as a recovery path, when a
+     * later run observes an already-staged update whose conflict resolution did not complete
+     * (see [Preferences.conflictResolutionComplete]). Both entry points execute while the device
+     * is still booted on the old slot, where a conflicting app remains an ordinary user package
+     * that can be cleanly uninstalled.
+     *
+     * On success the completion flag is set so subsequent runs skip directly to the reboot
+     * reminder instead of repeating resolution, and [UpdateSucceeded] is returned. Unremovable
+     * conflicts cause the staged update to be reverted, the flag to remain unset, and
+     * [UpdateFailedConflicts] to be returned rather than allowing a reboot into a slot that would
+     * bootloop on the leftover app.
+     */
+    private fun completeStagedUpdate(): Result {
+        val conflictBlockers = resolvePackageConflicts(rules)
+        return if (conflictBlockers.isNotEmpty()) {
+            Log.w(TAG, "Unremovable conflicting packages; reverting staged update: $conflictBlockers")
+            revertStagedUpdate()
+            prefs.conflictResolutionComplete = false
+            UpdateFailedConflicts(conflictBlockers)
+        } else {
+            prefs.conflictResolutionComplete = true
+            UpdateSucceeded
+        }
+    }
+
     @SuppressLint("WakelockTimeout")
     override fun run() {
         startLogcat()
@@ -1140,17 +1168,39 @@ class UpdaterThread(
                 Log.d(TAG, "New status after revert: $newStatusStr")
 
                 if (newStatus == UpdateEngineStatus.IDLE) {
+                    // The staged slot no longer exists; the completion flag must not carry over to
+                    // a subsequent staged update.
+                    prefs.conflictResolutionComplete = false
                     listener.onUpdateResult(this, UpdateReverted)
                 } else {
                     listener.onUpdateResult(this, UpdateFailed(newStatusStr))
                 }
             } else if (status == UpdateEngineStatus.UPDATED_NEED_REBOOT) {
-                // The update already completed in a previous run; backup and
-                // conflict resolution ran then. Nothing to do but remind the user.
-
-                // Resend success notification to remind the user to reboot. We can't perform any
-                // further operations besides reverting.
-                listener.onUpdateResult(this, UpdateNeedReboot)
+                // An update is staged and the engine is pending reboot. This state only indicates
+                // that update_engine finished applying the payload; it does not establish that
+                // post-payload conflict resolution completed, because the engine enters this state
+                // autonomously the moment the slot is staged. The reboot prompt is therefore gated
+                // on the explicit completion flag rather than on the engine state.
+                if (prefs.conflictResolutionComplete) {
+                    // Resolution already ran (this is a later reminder run). Resend the success
+                    // notification to remind the user to reboot. No further operations besides
+                    // reverting are possible here.
+                    listener.onUpdateResult(this, UpdateNeedReboot)
+                } else {
+                    // The staged update never completed conflict resolution: the run that staged
+                    // it was interrupted before finishing, or this run observed the engine in a
+                    // transient reboot-pending state. Resolution is run now, while still booted on
+                    // the old slot, before the reboot prompt is offered.
+                    Log.w(TAG, "Staged update missing conflict resolution; running it now")
+                    val result = completeStagedUpdate()
+                    // A clean result maps to the reminder variant: UpdateSucceeded and
+                    // UpdateNeedReboot both render the reboot prompt, and the reminder variant
+                    // re-alerts an existing notification only once.
+                    listener.onUpdateResult(
+                        this,
+                        if (result == UpdateSucceeded) UpdateNeedReboot else result,
+                    )
+                }
             } else {
                 if (status == UpdateEngineStatus.IDLE) {
                     if (action == Action.MONITOR) {
@@ -1189,7 +1239,13 @@ class UpdaterThread(
 		   // backupEngine.backup("com.google.android.apps.messaging")
                    
 		    rules = checkUpdateResult.rules
-                 
+
+                    // A new payload is about to be staged; any prior completion flag no longer
+                    // applies. Cleared before installation so that an interruption between staging
+                    // and conflict resolution leaves the flag unset, forcing the recovery path on
+                    // the next run rather than offering an unsafe reboot.
+                    prefs.conflictResolutionComplete = false
+
                     startInstallation(
                         checkUpdateResult.otaUri,
                         checkUpdateResult.csigInfo,
@@ -1212,29 +1268,26 @@ class UpdaterThread(
                     } else {
                         Log.d(TAG, "Successfully completed upgrade")
 
-                        // The new slot is staged and the engine is now pending reboot. We are
-                        // still booted on the old slot, so any conflicting user-installed app is
-                        // still an ordinary /data/app package that can be cleanly uninstalled
-                        // here, before the user is prompted to reboot into the new slot.
+                        // The new slot is staged and the engine is now pending reboot. The device
+                        // is still booted on the old slot, so any conflicting user-installed app is
+                        // still an ordinary /data/app package that can be cleanly uninstalled here,
+                        // before the user is prompted to reboot into the new slot.
                         //
-                        // If any conflict cannot be safely removed, the new slot would bootloop
-                        // on the leftover app until the OS fell back to the old slot, so we
-                        // unstage (revert) the update and report which packages blocked it rather
-                        // than letting the user reboot into a broken slot.
-                        val conflictBlockers = resolvePackageConflicts(rules)
-                        if (conflictBlockers.isNotEmpty()) {
-                            Log.w(TAG, "Unremovable conflicting packages; reverting staged " +
-                                    "update: $conflictBlockers")
-                            revertStagedUpdate()
-                            listener.onUpdateResult(this, UpdateFailedConflicts(conflictBlockers))
-                        } else {
+                        // Conflict resolution is run before the reboot prompt is offered. On
+                        // success the completion flag is set inside completeStagedUpdate() so that
+                        // the prompt is gated on completion of this work rather than on the engine
+                        // reboot-pending state, which was reached autonomously before this point.
+                        // Unremovable conflicts cause a revert, since the new slot would bootloop on
+                        // the leftover app until the OS fell back to the old slot.
+                        val result = completeStagedUpdate()
+                        if (result == UpdateSucceeded) {
                             // The custom OTA source is a one-shot: reset it to the default
                             // (disabled) after a successful update.
                             prefs.allowCustomOtaSource = false
                             prefs.allowReinstall = false
                             prefs.isDebugMode = false
-                            listener.onUpdateResult(this, UpdateSucceeded)
                         }
+                        listener.onUpdateResult(this, result)
                     }
                 } else if (error == UpdateEngineError.USER_CANCELED) {
                     deleteCareMap()

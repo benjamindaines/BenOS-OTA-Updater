@@ -94,6 +94,7 @@ class Preferences(initialContext: Context) {
         private const val PREF_BENOS_KOFI_URL = "benos_kofi_url"
         private const val PREF_OTA_SERVER_URL = "ota_server_url"
         private const val PREF_BETA_CROSSGRADE_STAGED = "beta_crossgrade_staged"
+        private const val PREF_CONFLICT_RESOLUTION_COMPLETE = "conflict_resolution_complete"
 
         private fun migrateToDeviceProtectedStorage(context: Context) {
             synchronized(this) {
@@ -225,6 +226,22 @@ class Preferences(initialContext: Context) {
     var betaCrossGradeStaged: Boolean
         get() = prefs.getBoolean(PREF_BETA_CROSSGRADE_STAGED, false)
         set(staged) = prefs.edit { putBoolean(PREF_BETA_CROSSGRADE_STAGED, staged) }
+
+    /**
+     * Whether post-payload conflict resolution completed for the currently staged update.
+     *
+     * update_engine enters [com.chiller3.custota.updater.UpdateEngineStatus.UPDATED_NEED_REBOOT]
+     * autonomously the moment a slot is staged, which is before Custota runs backup and
+     * conflict resolution. The engine state therefore cannot be used as evidence that the
+     * post-payload work finished. This flag records that evidence explicitly: it is cleared
+     * when a new payload begins staging and set only after conflict resolution succeeds, so the
+     * reboot prompt is gated on completion of Custota's own work rather than on the engine state.
+     * A run that observes a staged update with this flag unset treats the resolution as
+     * incomplete and re-runs it before offering reboot.
+     */
+    var conflictResolutionComplete: Boolean
+        get() = prefs.getBoolean(PREF_CONFLICT_RESOLUTION_COMPLETE, false)
+        set(complete) = prefs.edit { putBoolean(PREF_CONFLICT_RESOLUTION_COMPLETE, complete) }
 
     /** Whether to check for updates periodically. */
     var automaticCheck: Boolean
