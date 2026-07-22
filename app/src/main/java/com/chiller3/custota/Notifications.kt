@@ -34,6 +34,10 @@ class Notifications(
         // Distinct from ID_ALERT so that beta expiry notices neither overwrite nor are overwritten
         // by ordinary update alerts.
         const val ID_BETA = 3
+        // Distinct id for the boot-time module-install reboot prompt. The post-OTA reboot prompt
+        // (ID_ALERT) is raised on the pre-reboot boot and is absent once the new slot is running,
+        // so no collision occurs, but a separate id guarantees independence regardless.
+        const val ID_MODULE_REBOOT = 4
     }
 
     private val notificationManager = context.getSystemService(NotificationManager::class.java)
@@ -270,6 +274,54 @@ class Notifications(
         }
 
         notificationManager.notify(ID_BETA, notification)
+    }
+
+    /**
+     * Post the boot-time module-install reboot prompt. [title] and [text] are supplied verbatim by
+     * the PIT installer so wording is owned by the script rather than the updater's resources; only
+     * the reboot action label ([rebootActionResId]) is drawn from resources. The action routes to
+     * [rebootIntent], which the caller obtains from
+     * [com.chiller3.custota.updater.UpdaterService.createRebootIntent]. Marked ongoing because the
+     * on-disk module tree is mid-swap until the restart occurs.
+     */
+    fun sendModuleRebootNotification(
+        title: String,
+        text: String?,
+        rebootActionResId: Int,
+        rebootIntent: Intent,
+    ) {
+        val actionPendingIntent = PendingIntent.getService(
+            context,
+            0,
+            rebootIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
+        val notification = Notification.Builder(context, CHANNEL_ID_SUCCESS).run {
+            setContentTitle(title)
+            if (!text.isNullOrBlank()) {
+                setContentText(text)
+                style = Notification.BigTextStyle().bigText(text)
+            }
+            setSmallIcon(R.drawable.ic_notifications)
+            setOngoing(true)
+            setOnlyAlertOnce(true)
+            setVisibility(Notification.VISIBILITY_PUBLIC)
+
+            addAction(Notification.Action.Builder(
+                null,
+                context.getString(rebootActionResId),
+                actionPendingIntent,
+            ).build())
+
+            build()
+        }
+
+        notificationManager.notify(ID_MODULE_REBOOT, notification)
+    }
+
+    fun dismissModuleReboot() {
+        notificationManager.cancel(ID_MODULE_REBOOT)
     }
 
     fun dismissAlert() {

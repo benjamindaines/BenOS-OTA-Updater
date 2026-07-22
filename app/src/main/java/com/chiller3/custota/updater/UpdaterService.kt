@@ -464,5 +464,14 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
             val parcelableAction: Parcelable = action
             putExtra(EXTRA_ACTION, parcelableAction)
         }
+
+        /**
+        * Reboot notification action to be called by PIT installer. Gives a nice prompt to reboot
+        * for module updates after the merge has completed.
+         */
+        fun createRebootIntent(context: Context): Intent =
+            Intent(context, UpdaterService::class.java).apply {
+                action = ACTION_REBOOT
+            }
     }
 }
