@@ -42,7 +42,7 @@ class Preferences(initialContext: Context) {
         // Marks the running build as a time-limited beta. The stable build to
         // which the device is cross-graded ships this as false, which is what
         // makes the operation one-shot: after reboot nothing re-arms.
-        const val BETA_BUILD = false
+        const val BETA_BUILD = true
 
         // Expiry deadline expressed as a local calendar date rather than an
         // absolute Unix timestamp. Resolution against the device's active time
