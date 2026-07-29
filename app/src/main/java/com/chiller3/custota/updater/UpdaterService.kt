@@ -254,6 +254,8 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
             is UpdaterThread.UpdateAvailable -> {
                 channel = Notifications.CHANNEL_ID_CHECK
                 // Only bug the user once while the notification is still shown
+		// manually check for updates doesn't seem to bring the notification
+		// back, disabling onlyAlertOnce for now. Turned out to  be a novalauncher issue
                 onlyAlertOnce = true
                 titleResId = R.string.notification_update_ota_available
                 message = result.fingerprints.joinToString("\n")

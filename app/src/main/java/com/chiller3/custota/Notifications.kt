@@ -292,7 +292,7 @@ class Notifications(
     ) {
         val actionPendingIntent = PendingIntent.getService(
             context,
-            0,
+            2,
             rebootIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
@@ -316,10 +316,14 @@ class Notifications(
 
             build()
         }
-
+	// Currently nothing guards against a late module reboot notification 
+	// prompting the user reboot during a current update. This normally shouldn't 
+	// happen, however. Only discovered the condition when chasing down 
+	// a stuck-as-pending notification bug. Typically, a second OTA is not
+	// going to be installed before user is prompted & reboots for modules update
         notificationManager.notify(ID_MODULE_REBOOT, notification)
     }
-
+    // This isn't called anywhere currently, will need for A16 rebase
     fun dismissModuleReboot() {
         notificationManager.cancel(ID_MODULE_REBOOT)
     }

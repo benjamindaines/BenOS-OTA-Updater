@@ -14,6 +14,7 @@ object PackageConflictConfig {
     val PACKAGE_NAMES: List<String> = listOf(
 	"com.q25.keymapperbootfix",
         "com.blackberry.keyboard",
+        "com.blackberry.keyboard.debug",
         "tech.shroyer.q25trackpadcustomizer",
         "com.duc1607.resolutionchanger",
         "com.duc1607.q25led",

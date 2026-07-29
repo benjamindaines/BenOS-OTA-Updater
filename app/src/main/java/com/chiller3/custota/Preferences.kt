@@ -24,7 +24,7 @@ class Preferences(initialContext: Context) {
     companion object {
         private val TAG = Preferences::class.java.simpleName
 
-        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/testing-val"
+        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/test-soap"
 
         // URL opened by the "Open BenOS Website" button on the update message
         // screen. Edit this to point at the real BenOS website. It can also be
@@ -50,7 +50,7 @@ class Preferences(initialContext: Context) {
         // regardless of the zone the device currently reports.
         const val BETA_EXPIRY_YEAR = 2026
         const val BETA_EXPIRY_MONTH = 9    // 1-12
-        const val BETA_EXPIRY_DAY = 1
+        const val BETA_EXPIRY_DAY = 11
 
         // Local hour of day (0-23) at which the cross-grade becomes eligible on
         // the expiry date, and at which the day-before warning is posted. 03:00
