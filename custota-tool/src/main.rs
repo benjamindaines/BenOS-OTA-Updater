@@ -1036,7 +1036,7 @@ fn validate_and_build_rules(
     default_timestamp: Option<i64>,
 ) -> Result<Vec<Rule>> {
     let mut rules = Vec::with_capacity(toml_doc.rule.len());
-    let mut seen: HashSet<(String, Action)> = HashSet::new();
+    let mut seen: HashSet<(String, Action, i64, bool)> = HashSet::new();
     let mut capture_pkgs: HashSet<&str> = HashSet::new();
     let mut conflict_pkgs: HashSet<&str> = HashSet::new();
 
@@ -1050,7 +1050,7 @@ fn validate_and_build_rules(
 
         let timestamp = resolve_timestamp(&raw.package, &raw.timestamp, default_timestamp)?;
 
-        if !seen.insert((raw.package.clone(), action)) {
+        if !seen.insert((raw.package.clone(), action, timestamp, raw.oneshot)) {
             warn!(
                 "Ignoring duplicate rule: {} ({})",
                 raw.package,
