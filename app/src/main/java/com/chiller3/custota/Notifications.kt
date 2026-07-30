@@ -87,7 +87,7 @@ class Notifications(
     private fun createCleanupAlertsChannel() = NotificationChannel(
         CHANNEL_ID_CLEANUP,
         context.getString(R.string.notification_channel_cleanup_name),
-        NotificationManager.IMPORTANCE_NONE,
+        NotificationManager.IMPORTANCE_LOW,
     ).apply {
         description = context.getString(R.string.notification_channel_cleanup_desc)
     }
