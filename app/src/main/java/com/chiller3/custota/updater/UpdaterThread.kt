@@ -637,7 +637,6 @@ class UpdaterThread(
         // Required
         val preDevices = metadata.precondition.deviceList
         val postSecurityPatchLevel = metadata.postcondition.securityPatchLevel
-        val postTimestamp = metadata.postcondition.timestamp * 1000
 
         val securityPatch = getSecurityPatch()
 
@@ -649,9 +648,6 @@ class UpdaterThread(
         } else if (postSecurityPatchLevel < securityPatch) {
             throw ValidationException("Downgrading to older security patch is not allowed: " +
                     "current=$securityPatch, ota=$postSecurityPatchLevel")
-        } else if (postTimestamp < Build.TIME) {
-            throw ValidationException("Downgrading to older timestamp is not allowed: " +
-                    "current=${Build.TIME}, ota=$postTimestamp")
         }
 
         // Optional

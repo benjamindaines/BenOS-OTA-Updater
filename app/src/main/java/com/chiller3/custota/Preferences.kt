@@ -24,7 +24,7 @@ class Preferences(initialContext: Context) {
     companion object {
         private val TAG = Preferences::class.java.simpleName
 
-        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/beta"
+        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/install-val"
 
         // URL opened by the "Open BenOS Website" button on the update message
         // screen. Edit this to point at the real BenOS website. It can also be
@@ -42,7 +42,7 @@ class Preferences(initialContext: Context) {
         // Marks the running build as a time-limited beta. The stable build to
         // which the device is cross-graded ships this as false, which is what
         // makes the operation one-shot: after reboot nothing re-arms.
-        const val BETA_BUILD = true
+        const val BETA_BUILD = false
 
         // Expiry deadline expressed as a local calendar date rather than an
         // absolute Unix timestamp. Resolution against the device's active time
