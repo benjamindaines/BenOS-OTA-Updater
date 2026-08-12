@@ -54,7 +54,8 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
                     // We're launched by startForegroundService(). Android requires the foreground
                     // notification to be shown, even if stopService() is called before this method
                     // returns.
-                    updateForegroundNotification(false)
+                    // updateForegroundNotification(false)
+                    updateForegroundNotification(true)
 
                     startUpdate(intent)
                 }
@@ -252,18 +253,22 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
                 showReboot = false
             }
             is UpdaterThread.UpdateAvailable -> {
-                channel = Notifications.CHANNEL_ID_CHECK
+                // channel = Notifications.CHANNEL_ID_AVAILABLE
+		// Nigara Launcher eats these silent notifications, need to bump importance
+		// so those users actually get a notification with an "install" button.
+                channel = Notifications.CHANNEL_ID_AVAILABLE
                 // Only bug the user once while the notification is still shown
 		// manually check for updates doesn't seem to bring the notification
 		// back, disabling onlyAlertOnce for now. Turned out to  be a novalauncher issue
                 onlyAlertOnce = true
                 titleResId = R.string.notification_update_ota_available
-                message = result.fingerprints.joinToString("\n")
+                // message = result.fingerprints.joinToString("\n")
+		message = null
                 showInstall = true
                 showRetry = false
                 showReboot = false
                 updateMessage = result.message
-                updateFingerprints = result.fingerprints
+                // updateFingerprints = result.fingerprints
             }
             UpdaterThread.UpdateUnnecessary -> {
                 if (silenceForPeriodic) {
@@ -273,7 +278,7 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
                 }
 
                 channel = Notifications.CHANNEL_ID_CHECK
-                onlyAlertOnce = false
+                onlyAlertOnce = true
                 titleResId = R.string.notification_update_ota_unnecessary
                 message = null
                 showInstall = false
@@ -291,7 +296,7 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
                 showReboot = true
             }
             UpdaterThread.UpdateReverted -> {
-                channel = Notifications.CHANNEL_ID_SUCCESS
+                channel = Notifications.CHANNEL_ID_CRITICAL
                 onlyAlertOnce = false
                 titleResId = R.string.notification_update_ota_reverted
                 message = null
@@ -309,7 +314,7 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
                 showReboot = false
             }
             is UpdaterThread.UpdateFailed -> {
-                channel = Notifications.CHANNEL_ID_FAILURE
+                channel = Notifications.CHANNEL_ID_CRITICAL
                 onlyAlertOnce = false
                 titleResId = R.string.notification_update_ota_failed
                 message = result.errorMsg
@@ -318,7 +323,7 @@ class UpdaterService : Service(), UpdaterThread.UpdaterThreadListener {
                 showReboot = false
             }
             is UpdaterThread.UpdateFailedConflicts -> {
-                channel = Notifications.CHANNEL_ID_FAILURE
+                channel = Notifications.CHANNEL_ID_CRITICAL
                 onlyAlertOnce = false
                 titleResId = R.string.notification_update_ota_failed_conflicts
                 message = result.packages.joinToString("\n")

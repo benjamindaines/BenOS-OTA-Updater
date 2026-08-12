@@ -93,7 +93,7 @@ class UpdateMessageActivity : ComponentActivity() {
                         finish()
                     },
                     onCancel = { finish() },
-                    onOpenWebsite = { openWebsite() },
+                    //onOpenWebsite = { openWebsite() },
                     onOpenKofi = { openKofi() },
                 )
             }
@@ -123,7 +123,7 @@ class UpdateMessageActivity : ComponentActivity() {
 	}, 300)
     }
 
-    /** Open the configured BenOS website URL in the user's browser. */
+    /** Open the configured BenOS website URL in the user's browser. 
     private fun openWebsite() {
         val url = Preferences(this).benosWebsiteUrl
         try {
@@ -132,7 +132,7 @@ class UpdateMessageActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.w("UpdateMessageActivity", "Failed to open website: $url", e)
         }
-    }
+    } */
     
     private fun openKofi() {
         val url = Preferences(this).benosKofiUrl
@@ -166,7 +166,7 @@ private fun UpdateMessageScreen(
     fingerprints: List<String>,
     onInstall: () -> Unit,
     onCancel: () -> Unit,
-    onOpenWebsite: () -> Unit,
+    //onOpenWebsite: () -> Unit,
     onOpenKofi: () -> Unit,
 ) {
     val blocks = remember(message) { Markdown.parse(message) }
@@ -219,10 +219,10 @@ private fun UpdateMessageScreen(
 		    ) {
                     Text(stringResource(R.string.update_message_open_kofi))
                 }
-                Spacer(Modifier.weight(1f)) 
-                OutlinedButton(onClick = onOpenWebsite) {
-                    Text(stringResource(R.string.update_message_open_website))
-                }
+//                Spacer(Modifier.weight(1f)) 
+//                OutlinedButton(onClick = onOpenWebsite) {
+//                    Text(stringResource(R.string.update_message_open_website))
+//                }
                 Spacer(Modifier.weight(1f))
                 OutlinedButton(onClick = onCancel) {
                     Text(stringResource(R.string.update_message_dont_install))

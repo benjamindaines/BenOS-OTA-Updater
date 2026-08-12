@@ -26,6 +26,8 @@ class Notifications(
         const val CHANNEL_ID_SUCCESS = "success"
         const val CHANNEL_ID_CLEANUP = "cleanup"
         const val CHANNEL_ID_BETA = "beta"
+        const val CHANNEL_ID_AVAILABLE = "available"
+        const val CHANNEL_ID_CRITICAL = "critical"
 
         private val LEGACY_CHANNEL_IDS = arrayOf<String>()
 
@@ -45,11 +47,9 @@ class Notifications(
     private fun createPersistentChannel() = NotificationChannel(
         CHANNEL_ID_PERSISTENT,
         context.getString(R.string.notification_channel_persistent_name),
-        NotificationManager.IMPORTANCE_HIGH,
+        NotificationManager.IMPORTANCE_LOW,
     ).apply {
         description = context.getString(R.string.notification_channel_persistent_desc)
-	setSound(null, null)
-	enableVibration(false)
     }
 
     private fun createCheckAlertsChannel() = NotificationChannel(
@@ -74,6 +74,29 @@ class Notifications(
         NotificationManager.IMPORTANCE_HIGH,
     ).apply {
         description = context.getString(R.string.notification_channel_success_desc)
+	setSound(null, null)
+	enableVibration(false)
+    }
+
+    // As much as I wanted truly unobtrusive notifications, it creates compatability
+    // issues, so gotta bump up to DEFAULT
+    private fun createAvailableChannel() = NotificationChannel(
+        CHANNEL_ID_AVAILABLE,
+        context.getString(R.string.notification_channel_available_name),
+        NotificationManager.IMPORTANCE_DEFAULT,
+    ).apply {
+        description = context.getString(R.string.notification_channel_available_desc)
+	setSound(null, null)
+	enableVibration(false)
+    }
+
+    // Alert the user failed updates so they can restart.
+    private fun createCriticalAlertsChannel() = NotificationChannel(
+        CHANNEL_ID_CRITICAL,
+        context.getString(R.string.notification_channel_critical_name),
+        NotificationManager.IMPORTANCE_HIGH,
+    ).apply {
+        description = context.getString(R.string.notification_channel_critical_desc)
     }
 
     private fun createBetaChannel() = NotificationChannel(
@@ -92,6 +115,7 @@ class Notifications(
         description = context.getString(R.string.notification_channel_cleanup_desc)
     }
 
+
     /**
      * Ensure notification channels are up-to-date.
      *
@@ -103,6 +127,8 @@ class Notifications(
             createCheckAlertsChannel(),
             createFailureAlertsChannel(),
             createSuccessAlertsChannel(),
+            createAvailableChannel(),
+            createCriticalAlertsChannel(),
             createCleanupAlertsChannel(),
             createBetaChannel(),
         ))
@@ -265,7 +291,7 @@ class Notifications(
         val notification = Notification.Builder(context, CHANNEL_ID_BETA).run {
             setContentTitle(title)
             setContentText(message)
-            style = Notification.BigTextStyle().bigText(message)
+            //style = Notification.BigTextStyle().bigText(message)
             setSmallIcon(R.drawable.ic_notifications)
             setContentIntent(pendingIntent)
             setAutoCancel(true)
@@ -301,7 +327,7 @@ class Notifications(
             setContentTitle(title)
             if (!text.isNullOrBlank()) {
                 setContentText(text)
-                style = Notification.BigTextStyle().bigText(text)
+                //style = Notification.BigTextStyle().bigText(text)
             }
             setSmallIcon(R.drawable.ic_notifications)
             setOngoing(true)

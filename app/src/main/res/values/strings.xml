@@ -113,6 +113,10 @@
     <string name="notification_action_cancel">Cancel</string>
     <string name="notification_action_reboot">Reboot</string>
     <string name="notification_action_retry">Retry</string>
+    <string name="notification_channel_available_name">Update available</string>
+    <string name="notification_channel_available_desc">Notifies when a system update is available to install.</string>
+    <string name="notification_channel_critical_name">Update failures</string>
+    <string name="notification_channel_critical_desc">Notifies when an update fails to install or is rolled back.</string>
 
     <!-- Alerts -->
     <string name="action_details">Details</string>

@@ -24,7 +24,7 @@ class Preferences(initialContext: Context) {
     companion object {
         private val TAG = Preferences::class.java.simpleName
 
-        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/anish"
+        const val DEFAULT_OTA_SOURCE = "https://ota.dgsd.ph/beta"
 
         // URL opened by the "Open BenOS Website" button on the update message
         // screen. Edit this to point at the real BenOS website. It can also be
