@@ -78,7 +78,7 @@ class Notifications(
 	enableVibration(false)
     }
 
-    // As much as I wanted truly unobtrusive notifications, it creates compatability
+    // As much as I wanted truly unobtrusive notifications, it creates compatibility
     // issues, so gotta bump up to DEFAULT
     private fun createAvailableChannel() = NotificationChannel(
         CHANNEL_ID_AVAILABLE,

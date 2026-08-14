@@ -583,7 +583,7 @@ class UpdaterThread(
             Log.d(TAG, "Rules: ${capture.size} capture, ${conflict.size} conflict")
             ResolvedRules(capture.distinct(), conflict.distinct(), conflictSystemFlags)
         } catch (e: Exception) {
-            Log.w(TAG, "Rules unavailable; failing closed to the hard-coded floor", e)
+            Log.w(TAG, "Rules unavailable; failing closed on the hard-cold floor", e)
             ResolvedRules.EMPTY
         }
     }
@@ -809,7 +809,10 @@ class UpdaterThread(
         val otaTimestamp = updateInfo.timestamp
         if (updateAvailable && romTimestamp != null && otaTimestamp != null) {
             Log.d(TAG, "ROM timestamp: $romTimestamp, OTA timestamp: $otaTimestamp")
-            if (romTimestamp > otaTimestamp) {
+			// very quick and dirty fix for displaying offer to update to an update that cannot be updated to. Still
+			// need to fix the ability to reinstall / force reinstall updates. Still throws error 51. From Custota or 
+			// update_engine?  Not sure.... 
+            if (romTimestamp > otaTimestamp || romTimestamp == otaTimestamp) {
                 Log.w(TAG, "ROM timestamp is newer than OTA; treating as up to date")
                 updateAvailable = false
             }
