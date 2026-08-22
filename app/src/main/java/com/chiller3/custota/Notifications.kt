@@ -323,7 +323,7 @@ class Notifications(
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
-        val notification = Notification.Builder(context, CHANNEL_ID_SUCCESS).run {
+        val notification = Notification.Builder(context, CHANNEL_ID_CRITICAL).run {
             setContentTitle(title)
             if (!text.isNullOrBlank()) {
                 setContentText(text)

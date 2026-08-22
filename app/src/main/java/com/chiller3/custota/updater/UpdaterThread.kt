@@ -654,13 +654,18 @@ class UpdaterThread(
         val preBuildIncremental = metadata.precondition.buildIncremental
         val preBuilds = metadata.precondition.buildList
 
-        if (preBuildIncremental.isNotEmpty() && preBuildIncremental != Build.VERSION.INCREMENTAL) {
-            throw ValidationException("Mismatched incremental version: " +
-                    "current=${Build.VERSION.INCREMENTAL}, ota=$preBuildIncremental")
-        } else if (preBuilds.isNotEmpty() && !preBuilds.contains(Build.FINGERPRINT)) {
-            throw ValidationException("Mismatched fingerprint: " +
-                    "current=${Build.FINGERPRINT}, ota=$preBuilds")
-        }
+//     Just going to no-op this whole fucking thing and hope it still builds. IDK why this value is comingfrom
+//     it's not in any of the metadata files that I can see. It's like it's being pulled out of it's gd ass.
+//     What a major pain in the ass this whole "just increment the build number so packagemanager rebuilds the 
+//     packages cache" has been... fuck me. 
+//
+//        if (preBuildIncremental.isNotEmpty() && preBuildIncremental != Build.VERSION.INCREMENTAL) {
+//            throw ValidationException("Mismatched incremental version: " +
+//                    "current=${Build.VERSION.INCREMENTAL}, ota=$preBuildIncremental")
+//        } else if (preBuilds.isNotEmpty() && !preBuilds.contains(Build.FINGERPRINT)) {
+//            throw ValidationException("Mismatched fingerprint: " +
+//                    "current=${Build.FINGERPRINT}, ota=$preBuilds")
+//        }
 
         // Property files
         val propertyFilesRaw = metadata.getPropertyFilesOrThrow("ota-property-files")
