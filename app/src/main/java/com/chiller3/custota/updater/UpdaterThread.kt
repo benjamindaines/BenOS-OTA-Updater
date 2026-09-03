@@ -654,10 +654,8 @@ class UpdaterThread(
         val preBuildIncremental = metadata.precondition.buildIncremental
         val preBuilds = metadata.precondition.buildList
 
-//     Just going to no-op this whole fucking thing and hope it still builds. IDK why this value is comingfrom
-//     it's not in any of the metadata files that I can see. It's like it's being pulled out of it's gd ass.
-//     What a major pain in the ass this whole "just increment the build number so packagemanager rebuilds the 
-//     packages cache" has been... fuck me. 
+//     This is disabled for.... reasons.  It's honestly probably fixed now, but this is gated off the BenOS
+//		timestamp prop, which is what I had always intended... so this is fine. 
 //
 //        if (preBuildIncremental.isNotEmpty() && preBuildIncremental != Build.VERSION.INCREMENTAL) {
 //            throw ValidationException("Mismatched incremental version: " +
@@ -761,8 +759,24 @@ class UpdaterThread(
         val romTimestamp = SystemPropertiesProxy.get(PROP_BENOS_TIMESTAMP).toLongOrNull()
         Log.d(TAG, "Current ROM timestamp: $romTimestamp")
 
-        val locationInfo = updateInfo.incremental[vbmetaDigest] ?: updateInfo.full
+        // A prior incremental installation that failed with a build-listed update_engine error
+        // arms a one-shot preference (see IncrementalFallbackConfig and the failure handler in
+        // run()). When armed, the incremental keyed to the current vbmeta digest is bypassed and
+        // the full package is selected instead. The flag is read but not cleared here: a bare
+        // Action.CHECK, or an Action.INSTALL diverted to the update-message acknowledgement gate,
+        // reaches this point without staging a payload, so consuming the flag here would burn it
+        // before the install it was meant to redirect. Consumption is therefore deferred to the
+        // install-commit point in run().
+        val forceFull = prefs.forceFullOta
+        val locationInfo = if (forceFull) {
+            updateInfo.full
+        } else {
+            updateInfo.incremental[vbmetaDigest] ?: updateInfo.full
+        }
         val isIncremental = locationInfo !== updateInfo.full
+        if (forceFull) {
+            Log.w(TAG, "Full-OTA fallback armed: incremental bypassed, full package selected")
+        }
         Log.d(TAG, "OTA is incremental: $isIncremental")
 
         val otaUri = resolveUri(baseUri, locationInfo.locationOta)
@@ -873,6 +887,7 @@ class UpdaterThread(
             csigInfo,
             message,
             rules,
+            isIncremental,
         )
     }
 
@@ -1206,6 +1221,12 @@ class UpdaterThread(
                     )
                 }
             } else {
+                // Records whether the payload staged by this run was an incremental. It stays
+                // false for the monitoring path (a payload staged by an earlier run, whose type is
+                // unknown here) and for full payloads, so only a genuine incremental attempt of
+                // this run can arm the fallback in the failure handler below.
+                var attemptWasIncremental = false
+
                 if (status == UpdateEngineStatus.IDLE) {
                     if (action == Action.MONITOR) {
                         // Nothing to do.
@@ -1250,6 +1271,18 @@ class UpdaterThread(
                     // the next run rather than offering an unsafe reboot.
                     prefs.conflictResolutionComplete = false
 
+                    // The type of the payload about to be staged determines whether a later
+                    // failure may arm the fallback.
+                    attemptWasIncremental = checkUpdateResult.isIncremental
+
+                    // A payload is now being staged, so the one-shot full-OTA fallback has served
+                    // its purpose and is consumed here rather than at selection time. Consuming at
+                    // this point means the flag survives the intermediate Action.CHECK and
+                    // message-acknowledgement passes (which return before staging) and is cleared
+                    // exactly once, when an installation actually begins. A full payload that then
+                    // fails cannot re-arm the flag, because attemptWasIncremental is false for it.
+                    prefs.forceFullOta = false
+
                     startInstallation(
                         checkUpdateResult.otaUri,
                         checkUpdateResult.csigInfo,
@@ -1290,6 +1323,10 @@ class UpdaterThread(
                             prefs.allowCustomOtaSource = false
                             prefs.allowReinstall = false
                             prefs.isDebugMode = false
+                            // A completed update invalidates any pending fallback intent. The flag
+                            // is normally already cleared at install-commit; this is a defensive
+                            // reset covering any path that reaches success with it still set.
+                            prefs.forceFullOta = false
                         }
                         listener.onUpdateResult(this, result)
                     }
@@ -1299,6 +1336,19 @@ class UpdaterThread(
                     Log.w(TAG, "User cancelled upgrade")
                     listener.onUpdateResult(this, UpdateCancelled)
                 } else {
+                    // An incremental payload that fails with an error the maintainer has listed
+                    // arms the one-shot full-OTA fallback, so that the next attempt (the retry
+                    // action re-dispatches the same Action, re-entering checkForUpdates) selects
+                    // the full package. Errors absent from the list leave the incremental path
+                    // unchanged, so transient conditions such as a dropped connection continue to
+                    // retry the smaller package as before. Full-payload failures never arm the
+                    // flag, as attemptWasIncremental is false for them.
+                    if (attemptWasIncremental &&
+                        error in IncrementalFallbackConfig.FALLBACK_ERROR_CODES) {
+                        Log.w(TAG, "Incremental failed with listed error $errorStr; " +
+                                "arming full-OTA fallback for the next attempt")
+                        prefs.forceFullOta = true
+                    }
                     throw Exception(errorStr)
                 }
             }
@@ -1340,6 +1390,10 @@ class UpdaterThread(
         val csigInfo: CsigInfo,
         val message: String?,
         val rules: ResolvedRules,
+        // True when the selected payload is an incremental (delta) package rather than the full
+        // package. Consumed by the failure handler in run() to decide whether a listed
+        // update_engine error should arm the one-shot full-OTA fallback.
+        val isIncremental: Boolean,
     )
 
     /** One entry of the signed rules file. */

@@ -96,6 +96,7 @@ class Preferences(initialContext: Context) {
         private const val PREF_OTA_SERVER_URL = "ota_server_url"
         private const val PREF_BETA_CROSSGRADE_STAGED = "beta_crossgrade_staged"
         private const val PREF_CONFLICT_RESOLUTION_COMPLETE = "conflict_resolution_complete"
+        private const val PREF_FORCE_FULL_OTA = "force_full_ota"
 
         private fun migrateToDeviceProtectedStorage(context: Context) {
             synchronized(this) {
@@ -243,6 +244,17 @@ class Preferences(initialContext: Context) {
     var conflictResolutionComplete: Boolean
         get() = prefs.getBoolean(PREF_CONFLICT_RESOLUTION_COMPLETE, false)
         set(complete) = prefs.edit { putBoolean(PREF_CONFLICT_RESOLUTION_COMPLETE, complete) }
+
+    /**
+     * One-shot flag arming the full-OTA fallback. Set when an incremental installation fails with
+     * an update_engine error listed in
+     * [com.chiller3.custota.updater.IncrementalFallbackConfig.FALLBACK_ERROR_CODES], and consumed at
+     * the install-commit point of the next installation attempt, which then selects the full
+     * package instead of the incremental. Defaults to false so ordinary installs are unaffected.
+     */
+    var forceFullOta: Boolean
+        get() = prefs.getBoolean(PREF_FORCE_FULL_OTA, false)
+        set(force) = prefs.edit { putBoolean(PREF_FORCE_FULL_OTA, force) }
 
     /** Whether to check for updates periodically. */
     var automaticCheck: Boolean
